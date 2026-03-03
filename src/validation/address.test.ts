@@ -1,8 +1,27 @@
 import { describe, expect, it } from "vitest";
 
-import { validateAddress, pubKeyToBech32 } from "./address.js";
+import { validateAddress, pubKeyToBech32, getAddressType, extractParts } from "./address.js";
 
 const mainnet_enterprise_key_addr = "addr1v99r3mwucuhwqyj3vg7gdlyam2xurku0xj6f9qgamh5vefc4jytpq";
+const testnet_enterprise_key_addr =
+  "addr_test1vp9r3mwucuhwqyj3vg7gdlyam2xurku0xj6f9qgamh5vefcw6shw9";
+
+const mainnet_enterprise_script_addr = "addr1wy0adahffetszp9fg84qj8lek7vpvr5chga2ljtumu6fx0qtdy49p";
+
+const mainnet_key_key_addr =
+  "addr1q99r3mwucuhwqyj3vg7gdlyam2xurku0xj6f9qgamh5vefccd4u3lk4wm9sjz2zs7mg2vlgtf8ru4v0p0truedrwm67ske0y8z";
+const testnet_key_key_addr =
+  "addr_test1qp9r3mwucuhwqyj3vg7gdlyam2xurku0xj6f9qgamh5vefccd4u3lk4wm9sjz2zs7mg2vlgtf8ru4v0p0truedrwm67s40jyta";
+
+const mainnet_script_key_addr =
+  "addr1zy0adahffetszp9fg84qj8lek7vpvr5chga2ljtumu6fx0qcd4u3lk4wm9sjz2zs7mg2vlgtf8ru4v0p0truedrwm67su4awmc";
+
+const mainnet_key_script_addr =
+  "addr1y99r3mwucuhwqyj3vg7gdlyam2xurku0xj6f9qgamh5vefcl6mmwjnjhqyz2js02py0lnduczc8f3w364lyhehe5jv7qr3uuaz";
+
+const mainnet_script_script_addr =
+  "addr1xy0adahffetszp9fg84qj8lek7vpvr5chga2ljtumu6fx0ql6mmwjnjhqyz2js02py0lnduczc8f3w364lyhehe5jv7qfawkpc";
+
 const mainnet_stake_key_addr = "stake1uxmeqz9eud42zt80ya9qh3pg99mrl88lmpxf3wc407yjjcsrtmywc";
 const mainnet_stake_script_addr = "stake17y0adahffetszp9fg84qj8lek7vpvr5chga2ljtumu6fx0qh8ynen";
 const testnet_stake_key_addr = "stake_test1urzjpwq78l3pgung9r4zgh53t3t4smkvgll5v0tnhu9dkvc2cc58h";
@@ -29,6 +48,38 @@ describe("validateAddress — payment addresses", () => {
     expect(validateAddress(mainnet_enterprise_key_addr, "addr")).toEqual(
       mainnet_enterprise_key_addr,
     );
+  });
+
+  it("validates testnet enterprise key address", () => {
+    expect(validateAddress(testnet_enterprise_key_addr, "addr")).toEqual(
+      testnet_enterprise_key_addr,
+    );
+  });
+
+  it("validates mainnet enterprise script address", () => {
+    expect(validateAddress(mainnet_enterprise_script_addr, "addr")).toEqual(
+      mainnet_enterprise_script_addr,
+    );
+  });
+
+  it("validates mainnet key+key address", () => {
+    expect(validateAddress(mainnet_key_key_addr, "addr")).toEqual(mainnet_key_key_addr);
+  });
+
+  it("validates testnet key+key address", () => {
+    expect(validateAddress(testnet_key_key_addr, "addr")).toEqual(testnet_key_key_addr);
+  });
+
+  it("validates mainnet script+key address", () => {
+    expect(validateAddress(mainnet_script_key_addr, "addr")).toEqual(mainnet_script_key_addr);
+  });
+
+  it("validates mainnet key+script address", () => {
+    expect(validateAddress(mainnet_key_script_addr, "addr")).toEqual(mainnet_key_script_addr);
+  });
+
+  it("validates mainnet script+script address", () => {
+    expect(validateAddress(mainnet_script_script_addr, "addr")).toEqual(mainnet_script_script_addr);
   });
 });
 
@@ -136,6 +187,15 @@ describe("validateAddress — DRep IDs", () => {
       error: "Invalid address format",
     });
   });
+
+  it("validates CIP-105 script DRep", () => {
+    const drep_id = "drep_script1rxdd99vu338y659qfg8nmpemdyhlsmaudgv4m4zdz7m5vz8uzt6";
+    expect(validateAddress(drep_id, "drep")).toEqual({
+      cip105: "drep_script1rxdd99vu338y659qfg8nmpemdyhlsmaudgv4m4zdz7m5vz8uzt6",
+      cip129: "drep1yvve4554njxyun2s5p9q70v88d5jl7r0h34pjhw5f5tmw3sjtrutp",
+      isScript: true,
+    });
+  });
 });
 
 describe("pubKeyToBech32", () => {
@@ -151,5 +211,60 @@ describe("pubKeyToBech32", () => {
   it("throws for invalid hex DRep", () => {
     const drep_hex = "7e0bdd1327bab4be5e209a588e6279cabf29d6174683c14986afb3858793c8";
     expect(() => pubKeyToBech32(drep_hex, "drep")).toThrow();
+  });
+});
+
+describe("getAddressType", () => {
+  it("identifies stake key address", () => {
+    const result = getAddressType(mainnet_stake_key_addr);
+    expect(result).toEqual({ type: "stake", keyHash: expect.any(String), hashType: "key" });
+  });
+
+  it("identifies stake script address", () => {
+    const result = getAddressType(mainnet_stake_script_addr);
+    expect(result).toEqual({ type: "stake", keyHash: expect.any(String), hashType: "script" });
+  });
+
+  it("identifies drep key address", () => {
+    const drep_id = "drep1ytwmwvtd0a8lr45ssner2tjxzv5y8q03w3606yeald9mdmgmwecja";
+    const result = getAddressType(drep_id);
+    expect(result).toEqual({ type: "drep", keyHash: expect.any(String), hashType: "key" });
+  });
+
+  it("identifies drep script address", () => {
+    const drep_id = "drep_script1rxdd99vu338y659qfg8nmpemdyhlsmaudgv4m4zdz7m5vz8uzt6";
+    const result = getAddressType(drep_id);
+    expect(result).toEqual({ type: "drep", keyHash: expect.any(String), hashType: "script" });
+  });
+
+  it("identifies pool address", () => {
+    const pool_id = "pool1v4a76mt3fqhg64qja6r2rk8d65g0h7a3qjd9ykay3wqvy2h9cff";
+    const result = getAddressType(pool_id);
+    expect(result).toEqual({ type: "pool", keyHash: expect.any(String), hashType: "key" });
+  });
+
+  it("returns error for invalid input", () => {
+    const result = getAddressType("not_a_bech32_address");
+    expect(result).toEqual({ error: "Not a valid bech32 address" });
+  });
+});
+
+describe("extractParts", () => {
+  it("splits hex into header and body", () => {
+    const [header, body] = extractParts("e1cbeb1cca6db2d343");
+    expect(header).toBe("e1");
+    expect(body).toBe("cbeb1cca6db2d343");
+  });
+
+  it("handles empty string", () => {
+    const [header, body] = extractParts("");
+    expect(header).toBe("");
+    expect(body).toBe("");
+  });
+
+  it("handles single character", () => {
+    const [header, body] = extractParts("a");
+    expect(header).toBe("a");
+    expect(body).toBe("");
   });
 });

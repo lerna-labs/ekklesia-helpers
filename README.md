@@ -26,31 +26,31 @@ Import from the root or from a specific subpath:
 
 ```ts
 // Root import
-import {validateAddress, verifySignature} from "@ekklesia/helpers";
+import { validateAddress, verifySignature } from "@ekklesia/helpers";
 
 // Subpath imports (better tree shaking)
-import {validateAddress} from "@ekklesia/helpers/validation";
-import {verifySignature} from "@ekklesia/helpers/crypto";
-import {verifyToken} from "@ekklesia/helpers/auth";
-import {fetchCalidusKey, verifyDeposit} from "@ekklesia/helpers/cardano";
-import {connectToDatabase, loadRoutes} from "@ekklesia/helpers/server";
+import { validateAddress } from "@ekklesia/helpers/validation";
+import { verifySignature } from "@ekklesia/helpers/crypto";
+import { verifyToken } from "@ekklesia/helpers/auth";
+import { fetchCalidusKey, verifyDeposit } from "@ekklesia/helpers/cardano";
+import { connectToDatabase, loadRoutes } from "@ekklesia/helpers/server";
 ```
 
 ### Example: Validate a Cardano address
 
 ```ts
-import {validateAddress} from "@ekklesia/helpers/validation";
+import { validateAddress } from "@ekklesia/helpers/validation";
 
 const result = validateAddress("stake1uxmeqz...", "stake");
 if (typeof result === "string") {
-    console.log("Valid stake address:", result);
+  console.log("Valid stake address:", result);
 }
 ```
 
 ### Example: Verify a COSE signature
 
 ```ts
-import {verifySignature} from "@ekklesia/helpers/crypto";
+import { verifySignature } from "@ekklesia/helpers/crypto";
 
 const isValid = await verifySignature(payload, address, signatureObject);
 ```
@@ -60,7 +60,7 @@ const isValid = await verifySignature(payload, address, signatureObject);
 ### Validation (`@ekklesia/helpers/validation`)
 
 | Export            | Description                                                              |
-|-------------------|--------------------------------------------------------------------------|
+| ----------------- | ------------------------------------------------------------------------ |
 | `validateAddress` | Validates Cardano addresses (bech32, hex, DRep CIP-105/CIP-129, calidus) |
 | `getAddressType`  | Returns address type, key hash, and hash type from a bech32 address      |
 | `pubKeyToBech32`  | Converts a hex public key to a bech32 address (DRep or calidus)          |
@@ -70,7 +70,7 @@ const isValid = await verifySignature(payload, address, signatureObject);
 ### Crypto (`@ekklesia/helpers/crypto`)
 
 | Export                     | Description                                                          |
-|----------------------------|----------------------------------------------------------------------|
+| -------------------------- | -------------------------------------------------------------------- |
 | `verifySignature`          | Verifies Ed25519 and COSE Sign1 signatures against a Cardano address |
 | `isPartyToScript`          | Checks if an address is a signatory of a native script               |
 | `getScriptCriteria`        | Extracts required signature criteria from a native script            |
@@ -79,13 +79,13 @@ const isValid = await verifySignature(payload, address, signatureObject);
 ### Auth (`@ekklesia/helpers/auth`)
 
 | Export        | Description                                              |
-|---------------|----------------------------------------------------------|
+| ------------- | -------------------------------------------------------- |
 | `verifyToken` | Verifies JWT tokens from cookies or Authorization header |
 
 ### Cardano (`@ekklesia/helpers/cardano`)
 
 | Export            | Description                                                   |
-|-------------------|---------------------------------------------------------------|
+| ----------------- | ------------------------------------------------------------- |
 | `getScript`       | Fetches a native script from the Koios API by script hash     |
 | `fetchCalidusKey` | Fetches the calidus (pool cold) key for a stake address       |
 | `fetchDrepName`   | Fetches the on-chain registered name for a DRep               |
@@ -97,7 +97,7 @@ const isValid = await verifySignature(payload, address, signatureObject);
 ### Server (`@ekklesia/helpers/server`)
 
 | Export                      | Description                                               |
-|-----------------------------|-----------------------------------------------------------|
+| --------------------------- | --------------------------------------------------------- |
 | `initializeConsole`         | Overrides console methods with colored log-level prefixes |
 | `resetConsole`              | Restores original console behavior                        |
 | `connectToDatabase`         | Connects to MongoDB with auto-reconnect                   |
@@ -113,14 +113,14 @@ const isValid = await verifySignature(payload, address, signatureObject);
 The Koios helpers (`getScript`, `fetchCalidusKey`, etc.) require:
 
 | Variable    | Description            |
-|-------------|------------------------|
+| ----------- | ---------------------- |
 | `API_URL`   | Koios API base URL     |
 | `API_TOKEN` | Koios API bearer token |
 
 The auth helper (`verifyToken`) requires:
 
 | Variable     | Description            |
-|--------------|------------------------|
+| ------------ | ---------------------- |
 | `JWT_SECRET` | Secret for JWT signing |
 
 ## Development

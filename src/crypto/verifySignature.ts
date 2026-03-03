@@ -113,8 +113,8 @@ function standardize_signature(signature: SignatureObject): SignatureObject {
   try {
     if (signature.key) cbor.decode(signature.key);
     if (signature.signature) cbor.decode(signature.signature);
-    signature.COSE_Sign1_hex = signature.signature;
-    signature.COSE_Key_hex = signature.key;
+    if (signature.signature) signature.COSE_Sign1_hex = signature.signature;
+    if (signature.key) signature.COSE_Key_hex = signature.key;
   } catch (_e) {
     // Not CBOR — probably a regular Ed25519 witness
   }
