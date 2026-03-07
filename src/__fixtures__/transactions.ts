@@ -2,7 +2,7 @@
  * Mock TxInfo objects for verifyDeposit tests.
  */
 
-import type { TxInfo } from "../cardano/koios.js";
+import type { TxInfo } from "../cardano/cardanoApi.js";
 
 const baseTx: Omit<TxInfo, "inputs" | "outputs" | "treasury_donation"> = {
   tx_hash: "abc123def456abc123def456abc123def456abc123def456abc123def456abcd",

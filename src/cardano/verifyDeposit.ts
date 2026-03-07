@@ -4,7 +4,7 @@
  * specified stake key contributed to the transaction inputs.
  */
 
-import { fetchTxInfo } from "./koios.js";
+import { fetchTxInfo } from "./cardanoApi.js";
 
 const regExpHex = /^[0-9a-fA-F]+$/;
 

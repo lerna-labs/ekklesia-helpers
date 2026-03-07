@@ -1,13 +1,22 @@
 import { describe, it, expect, beforeAll } from "vitest";
 
-import { fetchTxInfo, validateDrep, getScript, fetchCalidusKey } from "./koios.js";
+import {
+  fetchTxInfo,
+  validateDrep,
+  getScript,
+  fetchCalidusKey,
+  fetchPoolTicker,
+  fetchPoolMetadata,
+  resetProviders,
+} from "./cardanoApi.js";
 
 /**
  * Live API tests against preprod Koios. Skipped unless LIVE_TEST=true.
  * These use the public preprod endpoint which requires no auth token.
  */
-describe.skipIf(process.env.LIVE_TEST !== "true")("koios — live preprod tests", () => {
+describe.skipIf(process.env.LIVE_TEST !== "true")("cardanoApi — live preprod tests", () => {
   beforeAll(() => {
+    resetProviders();
     process.env.API_URL = "https://preprod.koios.rest/api/v1";
     process.env.API_TOKEN = "";
   });
@@ -61,6 +70,24 @@ describe.skipIf(process.env.LIVE_TEST !== "true")("koios — live preprod tests"
     if (result !== null) {
       expect(result).toHaveProperty("calidus_pub_key");
       expect(result).toHaveProperty("pool_id_bech32");
+    }
+  }, 15000);
+
+  it("fetchPoolTicker returns ticker or null for known preprod pool", async () => {
+    const result = await fetchPoolTicker(preprodPoolId);
+    // May or may not have metadata on preprod
+    if (result !== null) {
+      expect(typeof result).toBe("string");
+      expect(result.length).toBeGreaterThan(0);
+    }
+  }, 15000);
+
+  it("fetchPoolMetadata returns metadata or null for known preprod pool", async () => {
+    const result = await fetchPoolMetadata(preprodPoolId);
+    if (result !== null) {
+      expect(result).toHaveProperty("pool_id");
+      expect(result).toHaveProperty("ticker");
+      expect(result).toHaveProperty("name");
     }
   }, 15000);
 });

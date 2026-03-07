@@ -14,7 +14,7 @@ const { blake2bHex } = pkg;
 
 import { PublicKey, Ed25519Signature } from "@emurgo/cardano-serialization-lib-nodejs";
 import { getAddressType } from "../validation/address.js";
-import { getScript, fetchCalidusKey } from "../cardano/koios.js";
+import { getScript, fetchCalidusKey } from "../cardano/cardanoApi.js";
 
 /** A signature object as submitted by wallets. */
 export interface SignatureObject {

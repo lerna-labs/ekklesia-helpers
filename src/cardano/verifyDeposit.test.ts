@@ -9,11 +9,13 @@ import {
   depositAddr,
 } from "../__fixtures__/transactions.js";
 
-vi.mock("./koios.js", () => ({
+vi.mock("./cardanoApi.js", () => ({
   fetchTxInfo: vi.fn(),
 }));
 
-const { fetchTxInfo } = (await import("./koios.js")) as { fetchTxInfo: ReturnType<typeof vi.fn> };
+const { fetchTxInfo } = (await import("./cardanoApi.js")) as {
+  fetchTxInfo: ReturnType<typeof vi.fn>;
+};
 
 describe("verifyDeposit", () => {
   beforeEach(() => {

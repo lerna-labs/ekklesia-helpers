@@ -7,16 +7,21 @@ import {
   validateDrep,
   fetchHandle,
   fetchTxInfo,
-} from "./koios.js";
+  fetchPoolTicker,
+  fetchPoolMetadata,
+  fetchName,
+  resetProviders,
+} from "./cardanoApi.js";
 
 // Valid script hash for format validation (28 bytes = 56 hex chars)
 const validScriptHash = "2ac096b860eb407ffb4a8955ef15c3774be4c632f6d3310925f2026f";
 
-describe("koios", () => {
+describe("cardanoApi", () => {
   const ORIGINAL_ENV = process.env;
   const mockFetch = vi.fn();
 
   beforeEach(() => {
+    resetProviders();
     process.env = {
       ...ORIGINAL_ENV,
       API_URL: "https://api.koios.rest/api/v1",
@@ -322,6 +327,236 @@ describe("koios", () => {
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
       const result = await fetchTxInfo("abc123");
       expect(result).toBeNull();
+    });
+  });
+
+  describe("fetchPoolTicker", () => {
+    it("returns ticker for known pool", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_json: {
+              ticker: "NUTS",
+              name: "Stake Nuts",
+              homepage: "https://example.com",
+              description: "A pool",
+            },
+          },
+        ],
+      });
+      const result = await fetchPoolTicker("pool1abc");
+      expect(result).toBe("NUTS");
+    });
+
+    it("returns null when pool not found", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [],
+      });
+      const result = await fetchPoolTicker("pool1nonexistent");
+      expect(result).toBeNull();
+    });
+
+    it("returns null when pool has no metadata", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [{ pool_id_bech32: "pool1abc", meta_json: null }],
+      });
+      const result = await fetchPoolTicker("pool1abc");
+      expect(result).toBeNull();
+    });
+
+    it("returns null on fetch error", async () => {
+      mockFetch.mockRejectedValueOnce(new Error("Network error"));
+      const result = await fetchPoolTicker("pool1abc");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("fetchPoolMetadata", () => {
+    it("returns full metadata for known pool", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_json: {
+              ticker: "NUTS",
+              name: "Stake Nuts",
+              homepage: "https://stakenuts.com",
+              description: "The best pool",
+            },
+          },
+        ],
+      });
+      const result = await fetchPoolMetadata("pool1abc");
+      expect(result).toEqual({
+        pool_id: "pool1abc",
+        ticker: "NUTS",
+        name: "Stake Nuts",
+        homepage: "https://stakenuts.com",
+        description: "The best pool",
+      });
+    });
+
+    it("returns null when pool not found", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [],
+      });
+      const result = await fetchPoolMetadata("pool1nonexistent");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("fetchName", () => {
+    it("routes addr prefix to fetchHandle", async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ default_handle: "alice" }),
+      });
+      const result = await fetchName("addr1qxabc");
+      expect(result).toBe("alice");
+    });
+
+    it("routes addr_test prefix to fetchHandle", async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ default_handle: "bob" }),
+      });
+      const result = await fetchName("addr_test1qxabc");
+      expect(result).toBe("bob");
+    });
+
+    it("routes stake prefix to fetchHandle", async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ default_handle: "charlie" }),
+      });
+      const result = await fetchName("stake1uabc");
+      expect(result).toBe("charlie");
+    });
+
+    it("routes stake_test prefix to fetchHandle", async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ default_handle: "dave" }),
+      });
+      const result = await fetchName("stake_test1uabc");
+      expect(result).toBe("dave");
+    });
+
+    it("routes drep prefix to fetchDrepName", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          json: async () => [
+            { drep_id: "drep1abc", meta_url: "https://meta.example.com/drep.json" },
+          ],
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({ body: { givenName: "Alice DRep" } }),
+        });
+      const result = await fetchName("drep1abc");
+      expect(result).toBe("Alice DRep");
+    });
+
+    it("returns null for drep when name is undefined", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [{ drep_id: "drep1abc", meta_url: null }],
+      });
+      const result = await fetchName("drep1abc");
+      expect(result).toBeNull();
+    });
+
+    it("routes pool prefix to fetchPoolMetadata and returns name", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_json: {
+              ticker: "NUTS",
+              name: "Stake Nuts",
+              homepage: "https://example.com",
+              description: "A pool",
+            },
+          },
+        ],
+      });
+      const result = await fetchName("pool1abc");
+      expect(result).toBe("Stake Nuts");
+    });
+
+    it("falls back to ticker when pool name is null", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_json: { ticker: "NUTS", name: null, homepage: null, description: null },
+          },
+        ],
+      });
+      const result = await fetchName("pool1abc");
+      expect(result).toBe("NUTS");
+    });
+
+    it("returns null for unsupported prefix", async () => {
+      const result = await fetchName("script1abc");
+      expect(result).toBeNull();
+    });
+
+    it("returns null for empty string", async () => {
+      const result = await fetchName("");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("provider fallback", () => {
+    it("falls back to Blockfrost when Koios fails for fetchTxInfo", async () => {
+      process.env.BLOCKFROST_URL = "https://cardano-mainnet.blockfrost.io/api/v0";
+      process.env.BLOCKFROST_PROJECT_ID = "test-project-id";
+
+      // Koios fails with network error
+      mockFetch.mockRejectedValueOnce(new Error("Koios is down"));
+      // Blockfrost /txs/{hash} succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          hash: "abc123",
+          block: "block456",
+          block_height: 100,
+          block_time: 1700000000,
+          fees: "200000",
+          deposit: "0",
+          treasury_donation: "0",
+          output_amount: [{ unit: "lovelace", quantity: "10000000" }],
+        }),
+      });
+      // Blockfrost /txs/{hash}/utxos succeeds
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ hash: "abc123", inputs: [], outputs: [] }),
+      });
+
+      const result = await fetchTxInfo("abc123");
+      expect(result).not.toBeNull();
+      expect(result!.tx_hash).toBe("abc123");
+    });
+
+    it("falls back to Koios when Blockfrost is primary and fails", async () => {
+      process.env.PRIMARY_PROVIDER = "blockfrost";
+      process.env.BLOCKFROST_URL = "https://cardano-mainnet.blockfrost.io/api/v0";
+      process.env.BLOCKFROST_PROJECT_ID = "test-project-id";
+
+      // Blockfrost fails
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
+      // Koios succeeds
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [{ tx_hash: "abc123", block_height: 100 }],
+      });
+
+      const result = await fetchTxInfo("abc123");
+      expect(result).not.toBeNull();
+      expect(result!.tx_hash).toBe("abc123");
     });
   });
 });

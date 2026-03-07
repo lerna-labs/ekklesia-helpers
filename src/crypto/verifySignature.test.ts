@@ -28,12 +28,12 @@ import {
 
 import { ms, std_signatures, cose_signatures } from "../__fixtures__/scripts.js";
 
-vi.mock("../cardano/koios.js", () => ({
+vi.mock("../cardano/cardanoApi.js", () => ({
   getScript: vi.fn(),
   fetchCalidusKey: vi.fn(),
 }));
 
-const { getScript, fetchCalidusKey } = (await import("../cardano/koios.js")) as {
+const { getScript, fetchCalidusKey } = (await import("../cardano/cardanoApi.js")) as {
   getScript: ReturnType<typeof vi.fn>;
   fetchCalidusKey: ReturnType<typeof vi.fn>;
 };
