@@ -254,6 +254,9 @@ export async function verifySignature(
 ): Promise<boolean | SignatureError> {
   if (!payload) return { error: "Payload is missing" };
   if (!address) return { error: "Signer address is not provided" };
+  if (signature === null) {
+    return { error: "Signature is not a valid JSON object" };
+  }
   if (typeof signature !== "object") {
     return { error: "Signature is not a valid JSON object" };
   }

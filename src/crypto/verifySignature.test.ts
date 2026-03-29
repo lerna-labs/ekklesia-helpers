@@ -75,6 +75,14 @@ describe("verifySignature", () => {
         error: "Signature is not a valid JSON object",
       });
     });
+
+    it("returns error when signature is null", async () => {
+      expect(
+        await verifySignature(generic_payload, mainnet_stake_address, null as any),
+      ).toEqual({
+        error: "Signature is not a valid JSON object",
+      })
+    })
   });
 
   describe("stake key signatures", () => {
