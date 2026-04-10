@@ -28,6 +28,8 @@ const testnet_stake_key_addr = "stake_test1urzjpwq78l3pgung9r4zgh53t3t4smkvgll5v
 const testnet_stake_script_addr =
   "stake_test17q0adahffetszp9fg84qj8lek7vpvr5chga2ljtumu6fx0qsdw3aw";
 
+const invalid_addr = "addr14u467ljz";
+
 describe("validateAddress — general tests", () => {
   it("rejects missing address", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +43,12 @@ describe("validateAddress — general tests", () => {
       error: "Invalid signer type",
     });
   });
+
+  it("rejects an invalid address", () => {
+    expect(validateAddress(invalid_addr, "addr")).toEqual({
+      error: "Invalid address format",
+    })
+  })
 });
 
 describe("validateAddress — payment addresses", () => {

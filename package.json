@@ -56,9 +56,9 @@
     "bech32": "^2.0.0",
     "blakejs": "^1.2.0",
     "cbor": "^9.0.0",
-    "dotenv": "^16.0.0",
+    "dotenv": "^17.3.1",
     "jsonwebtoken": "^9.0.0",
-    "mongoose": "^8.0.0"
+    "mongoose": "^9.2.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.3",
