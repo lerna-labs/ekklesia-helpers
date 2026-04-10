@@ -10,7 +10,7 @@
   ],
   "entryPointStrategy": "expand",
   "out": "docs",
-  "name": "@ekklesia/helpers",
+  "name": "@lerna-labs/ekklesia-helpers",
   "readme": "README.md",
   "includeVersion": true,
   "exclude": ["**/*.test.ts", "**/*.live.test.ts", "src/__fixtures__/**"],

@@ -1,4 +1,4 @@
-# @ekklesia/helpers
+# @lerna-labs/ekklesia-helpers
 
 [![CI](https://github.com/lerna-labs/ekklesia-helpers/actions/workflows/ci.yml/badge.svg)](https://github.com/lerna-labs/ekklesia-helpers/actions/workflows/ci.yml)
 
@@ -10,14 +10,14 @@ proposals and voting modules into a single, typed TypeScript library.
 This package is published to GitHub Packages. Configure your `.npmrc`:
 
 ```
-@ekklesia:registry=https://npm.pkg.github.com
+@lerna-labs:registry=https://npm.pkg.github.com
 //npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
 Then install:
 
 ```bash
-npm install @ekklesia/helpers
+npm install @lerna-labs/ekklesia-helpers
 ```
 
 ## Usage
@@ -26,20 +26,20 @@ Import from the root or from a specific subpath:
 
 ```ts
 // Root import
-import { validateAddress, verifySignature } from "@ekklesia/helpers";
+import { validateAddress, verifySignature } from "@lerna-labs/ekklesia-helpers";
 
 // Subpath imports (better tree shaking)
-import { validateAddress } from "@ekklesia/helpers/validation";
-import { verifySignature } from "@ekklesia/helpers/crypto";
-import { verifyToken } from "@ekklesia/helpers/auth";
-import { fetchName, fetchIdentity, verifyDeposit } from "@ekklesia/helpers/cardano";
-import { connectToDatabase, loadRoutes } from "@ekklesia/helpers/server";
+import { validateAddress } from "@lerna-labs/ekklesia-helpers/validation";
+import { verifySignature } from "@lerna-labs/ekklesia-helpers/crypto";
+import { verifyToken } from "@lerna-labs/ekklesia-helpers/auth";
+import { fetchName, fetchIdentity, verifyDeposit } from "@lerna-labs/ekklesia-helpers/cardano";
+import { connectToDatabase, loadRoutes } from "@lerna-labs/ekklesia-helpers/server";
 ```
 
 ### Example: Validate a Cardano address
 
 ```ts
-import { validateAddress } from "@ekklesia/helpers/validation";
+import { validateAddress } from "@lerna-labs/ekklesia-helpers/validation";
 
 const result = validateAddress("stake1uxmeqz...", "stake");
 if (typeof result === "string") {
@@ -50,7 +50,7 @@ if (typeof result === "string") {
 ### Example: Verify a COSE signature
 
 ```ts
-import { verifySignature } from "@ekklesia/helpers/crypto";
+import { verifySignature } from "@lerna-labs/ekklesia-helpers/crypto";
 
 const isValid = await verifySignature(payload, address, signatureObject);
 ```
@@ -58,7 +58,7 @@ const isValid = await verifySignature(payload, address, signatureObject);
 ### Example: Resolve a Cardano identity
 
 ```ts
-import { fetchName, fetchIdentity } from "@ekklesia/helpers/cardano";
+import { fetchName, fetchIdentity } from "@lerna-labs/ekklesia-helpers/cardano";
 
 // Simple name lookup
 await fetchName("pool1qqqqqdk4zh..."); // "ATADA"
@@ -72,7 +72,7 @@ await fetchIdentity("pool1qqqqqdk4zh...");
 
 ## API
 
-### Validation (`@ekklesia/helpers/validation`)
+### Validation (`@lerna-labs/ekklesia-helpers/validation`)
 
 | Export            | Description                                                              |
 | ----------------- | ------------------------------------------------------------------------ |
@@ -82,7 +82,7 @@ await fetchIdentity("pool1qqqqqdk4zh...");
 | `extractParts`    | Extracts header byte and body from a hex-encoded address                 |
 | `sanitizeInput`   | Sanitizes user input (strips HTML tags/entities, preserves URLs)         |
 
-### Crypto (`@ekklesia/helpers/crypto`)
+### Crypto (`@lerna-labs/ekklesia-helpers/crypto`)
 
 | Export                     | Description                                                          |
 | -------------------------- | -------------------------------------------------------------------- |
@@ -91,13 +91,13 @@ await fetchIdentity("pool1qqqqqdk4zh...");
 | `getScriptCriteria`        | Extracts required signature criteria from a native script            |
 | `validateScriptSignatures` | Validates multiple signatures against a native script's requirements |
 
-### Auth (`@ekklesia/helpers/auth`)
+### Auth (`@lerna-labs/ekklesia-helpers/auth`)
 
 | Export        | Description                                              |
 | ------------- | -------------------------------------------------------- |
 | `verifyToken` | Verifies JWT tokens from cookies or Authorization header |
 
-### Cardano (`@ekklesia/helpers/cardano`)
+### Cardano (`@lerna-labs/ekklesia-helpers/cardano`)
 
 | Export              | Description                                                        |
 | ------------------- | ------------------------------------------------------------------ |
@@ -113,7 +113,7 @@ await fetchIdentity("pool1qqqqqdk4zh...");
 | `fetchIdentity`     | Returns rich identity metadata (displayName, type, description...) |
 | `verifyDeposit`     | Verifies transaction deposits and treasury donations on-chain      |
 
-### Server (`@ekklesia/helpers/server`)
+### Server (`@lerna-labs/ekklesia-helpers/server`)
 
 | Export                      | Description                                               |
 | --------------------------- | --------------------------------------------------------- |
