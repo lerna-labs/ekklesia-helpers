@@ -101,7 +101,7 @@ describe.skipIf(process.env.LIVE_TEST !== "true")("cardanoApi — live mainnet t
   }, 15000);
 
   it("validateDrep returns false for non-existent DRep", async () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
     const result = await validateDrep("drep1yyyyyy");
     expect(result).toBe(false);
     spy.mockRestore();
@@ -250,9 +250,7 @@ describe.skipIf(
  * Skipped if either provider is not configured.
  */
 describe.skipIf(
-  process.env.LIVE_TEST !== "true" ||
-    !process.env.API_URL ||
-    !process.env.BLOCKFROST_URL,
+  process.env.LIVE_TEST !== "true" || !process.env.API_URL || !process.env.BLOCKFROST_URL,
 )("cardanoApi — live failover (Koios unreachable, Blockfrost fallback)", () => {
   let savedApiUrl: string | undefined;
 
@@ -261,7 +259,7 @@ describe.skipIf(
   const knownStakeAddr = "stake1uxekfkqgs4ye2wnf38e7x8uy006wvleq3etu8t35gqmdmnq5v4rks";
 
   beforeAll(() => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
     savedApiUrl = process.env.API_URL;
     process.env.API_URL = "https://localhost:1"; // unreachable
     resetProviders();
@@ -294,9 +292,7 @@ describe.skipIf(
  * Skipped if either provider is not configured.
  */
 describe.skipIf(
-  process.env.LIVE_TEST !== "true" ||
-    !process.env.API_URL ||
-    !process.env.BLOCKFROST_URL,
+  process.env.LIVE_TEST !== "true" || !process.env.API_URL || !process.env.BLOCKFROST_URL,
 )("cardanoApi — live failover (Blockfrost unreachable, Koios fallback)", () => {
   let savedBlockfrostUrl: string | undefined;
   let savedPrimaryProvider: string | undefined;

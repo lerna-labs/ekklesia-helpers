@@ -47,8 +47,8 @@ describe("validateAddress — general tests", () => {
   it("rejects an invalid address", () => {
     expect(validateAddress(invalid_addr, "addr")).toEqual({
       error: "Invalid address format",
-    })
-  })
+    });
+  });
 });
 
 describe("validateAddress — payment addresses", () => {
