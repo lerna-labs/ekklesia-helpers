@@ -10,6 +10,7 @@ import {
   fetchPoolTicker,
   fetchPoolMetadata,
   fetchName,
+  fetchIdentity,
   resetProviders,
 } from "./cardanoApi.js";
 
@@ -39,14 +40,10 @@ describe("cardanoApi", () => {
   });
 
   describe("getApiConfig (indirect)", () => {
-    it("throws when API_URL is missing", async () => {
+    it("throws when no provider is configured", async () => {
       delete process.env.API_URL;
-      await expect(getScript(validScriptHash)).rejects.toThrow("API_URL is not set");
-    });
-
-    it("throws when API_TOKEN is missing", async () => {
       delete process.env.API_TOKEN;
-      await expect(getScript(validScriptHash)).rejects.toThrow("API_TOKEN is not set");
+      await expect(getScript(validScriptHash)).rejects.toThrow("No Cardano provider configured");
     });
   });
 
@@ -465,7 +462,7 @@ describe("cardanoApi", () => {
       expect(result).toBeNull();
     });
 
-    it("routes pool prefix to fetchPoolMetadata and returns name", async () => {
+    it("routes pool prefix to fetchPoolMetadata and returns ticker", async () => {
       mockFetch.mockResolvedValueOnce({
         json: async () => [
           {
@@ -480,20 +477,20 @@ describe("cardanoApi", () => {
         ],
       });
       const result = await fetchName("pool1abc");
-      expect(result).toBe("Stake Nuts");
+      expect(result).toBe("NUTS");
     });
 
-    it("falls back to ticker when pool name is null", async () => {
+    it("falls back to name when pool ticker is null", async () => {
       mockFetch.mockResolvedValueOnce({
         json: async () => [
           {
             pool_id_bech32: "pool1abc",
-            meta_json: { ticker: "NUTS", name: null, homepage: null, description: null },
+            meta_json: { ticker: null, name: "Stake Nuts", homepage: null, description: null },
           },
         ],
       });
       const result = await fetchName("pool1abc");
-      expect(result).toBe("NUTS");
+      expect(result).toBe("Stake Nuts");
     });
 
     it("returns null for unsupported prefix", async () => {
@@ -503,6 +500,113 @@ describe("cardanoApi", () => {
 
     it("returns null for empty string", async () => {
       const result = await fetchName("");
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("fetchIdentity", () => {
+    it("returns full pool metadata with ticker as displayName", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_json: {
+              ticker: "NUTS",
+              name: "Stake Nuts",
+              homepage: "https://example.com",
+              description: "A pool",
+            },
+          },
+        ],
+      });
+      const result = await fetchIdentity("pool1abc");
+      expect(result).toEqual({
+        displayName: "NUTS",
+        fullName: "Stake Nuts",
+        description: "A pool",
+        homepage: "https://example.com",
+        type: "pool",
+      });
+    });
+
+    it("falls back to name when pool ticker is null", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_json: { ticker: null, name: "Stake Nuts", homepage: null, description: null },
+          },
+        ],
+      });
+      const result = await fetchIdentity("pool1abc");
+      expect(result).toEqual({
+        displayName: "Stake Nuts",
+        fullName: "Stake Nuts",
+        type: "pool",
+      });
+    });
+
+    it("returns null when pool has no ticker or name", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_json: { ticker: null, name: null, homepage: null, description: null },
+          },
+        ],
+      });
+      const result = await fetchIdentity("pool1abc");
+      expect(result).toBeNull();
+    });
+
+    it("returns drep identity with givenName", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          json: async () => [{ drep_id: "drep1abc", meta_url: "https://meta.example.com" }],
+        })
+        .mockResolvedValueOnce({
+          json: async () => ({ body: { givenName: "Alice DRep" } }),
+        });
+      const result = await fetchIdentity("drep1abc");
+      expect(result).toEqual({ displayName: "Alice DRep", type: "drep" });
+    });
+
+    it("returns null when drep has no metadata URL", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [{ drep_id: "drep1abc", meta_url: null }],
+      });
+      const result = await fetchIdentity("drep1abc");
+      expect(result).toBeNull();
+    });
+
+    it("returns handle identity for addr prefix", async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ default_handle: "alice" }),
+      });
+      const result = await fetchIdentity("addr1qxabc");
+      expect(result).toEqual({ displayName: "alice", type: "handle" });
+    });
+
+    it("returns handle identity for stake prefix", async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ default_handle: "charlie" }),
+      });
+      const result = await fetchIdentity("stake1uabc");
+      expect(result).toEqual({ displayName: "charlie", type: "handle" });
+    });
+
+    it("returns null when handle not found", async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 404,
+      });
+      const result = await fetchIdentity("stake1uabc");
+      expect(result).toBeNull();
+    });
+
+    it("returns null for unsupported prefix", async () => {
+      const result = await fetchIdentity("script1abc");
       expect(result).toBeNull();
     });
   });

@@ -86,7 +86,7 @@ export class KoiosProvider implements CardanoProvider {
   }
 
   async fetchDrepInfo(drepIds: string[]): Promise<DrepInfo[]> {
-    return this.post<DrepInfo[]>("/drep_info?registered=eq.true", {
+    return this.post<DrepInfo[]>("/drep_info", {
       _drep_ids: drepIds,
     });
   }
@@ -151,6 +151,9 @@ export class KoiosProvider implements CardanoProvider {
           authorization: `Bearer ${this.config.apiToken}`,
         },
       });
+      if (response.ok === false) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       return (await response.json()) as T;
     } catch (error) {
       throw new ProviderError(this.name, `GET ${path} failed`, error);
@@ -167,6 +170,9 @@ export class KoiosProvider implements CardanoProvider {
         },
         body: JSON.stringify(body),
       });
+      if (response.ok === false) {
+        throw new Error(`HTTP ${response.status}`);
+      }
       return (await response.json()) as T;
     } catch (error) {
       throw new ProviderError(this.name, `POST ${path} failed`, error);

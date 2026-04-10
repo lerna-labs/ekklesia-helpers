@@ -57,6 +57,15 @@ export interface TxInfo {
   outputs: TxIO[];
 }
 
+/** Rich identity metadata returned by {@link fetchIdentity}. */
+export interface NameResult {
+  displayName: string;
+  fullName?: string;
+  description?: string;
+  homepage?: string;
+  type: "pool" | "drep" | "handle";
+}
+
 /** DRep info record. */
 export interface DrepInfo {
   drep_id: string;
@@ -80,22 +89,28 @@ let _secondary: CardanoProvider | null = null;
 
 function getProviders(): { primary: CardanoProvider; secondary: CardanoProvider | null } {
   if (!_primary) {
-    const isPrimaryBlockfrost = process.env.PRIMARY_PROVIDER === "blockfrost";
+    let koios: CardanoProvider | null = null;
+    let blockfrost: CardanoProvider | null = null;
 
-    if (isPrimaryBlockfrost) {
-      _primary = new BlockfrostProvider(getBlockfrostConfig());
-      try {
-        _secondary = new KoiosProvider(getKoiosConfig());
-      } catch {
-        _secondary = null;
-      }
-    } else {
-      _primary = new KoiosProvider(getKoiosConfig());
-      try {
-        _secondary = new BlockfrostProvider(getBlockfrostConfig());
-      } catch {
-        _secondary = null;
-      }
+    try {
+      koios = new KoiosProvider(getKoiosConfig());
+    } catch {
+      /* Koios not configured */
+    }
+    try {
+      blockfrost = new BlockfrostProvider(getBlockfrostConfig());
+    } catch {
+      /* Blockfrost not configured */
+    }
+
+    const preferBlockfrost = process.env.PRIMARY_PROVIDER === "blockfrost";
+    _primary = (preferBlockfrost ? (blockfrost ?? koios) : (koios ?? blockfrost)) ?? null;
+    _secondary = _primary === koios ? blockfrost : koios;
+
+    if (!_primary) {
+      throw new Error(
+        "No Cardano provider configured. Set API_URL/API_TOKEN (Koios) or BLOCKFROST_URL/BLOCKFROST_PROJECT_ID (Blockfrost).",
+      );
     }
   }
   return { primary: _primary, secondary: _secondary };
@@ -392,7 +407,60 @@ export async function fetchName(bech32Id: string): Promise<string | null> {
 
     case "pool": {
       const meta = await fetchPoolMetadata(bech32Id);
-      return meta?.name ?? meta?.ticker ?? null;
+      return meta?.ticker ?? meta?.name ?? null;
+    }
+  }
+}
+
+/**
+ * Fetch rich identity metadata for a Cardano entity.
+ *
+ * Routes by bech32 prefix to the appropriate provider method and returns
+ * a structured {@link NameResult} with display name, description, and type.
+ *
+ * @param bech32Id - A bech32-encoded pool, DRep, or address/stake identifier.
+ * @returns A {@link NameResult} or `null` if the entity cannot be resolved.
+ *
+ * @example
+ * ```ts
+ * await fetchIdentity("pool1pu5jlj4q9w9jlxeu370a3c9myx47md5j5m2str0naunn2q3lkdy");
+ * // { displayName: "NUTS", fullName: "Stake Nuts", description: "A pool", homepage: "https://example.com", type: "pool" }
+ * ```
+ */
+export async function fetchIdentity(bech32Id: string): Promise<NameResult | null> {
+  const prefix = NAMEABLE_PREFIXES.find((p) => bech32Id.startsWith(p));
+
+  if (!prefix) {
+    console.error(`Unsupported bech32 prefix in: ${bech32Id}`);
+    return null;
+  }
+
+  switch (prefix) {
+    case "addr":
+    case "addr_test":
+    case "stake":
+    case "stake_test": {
+      const handle = await fetchHandle(bech32Id);
+      return handle ? { displayName: handle, type: "handle" } : null;
+    }
+
+    case "drep": {
+      const name = await fetchDrepName(bech32Id);
+      return name ? { displayName: name, type: "drep" } : null;
+    }
+
+    case "pool": {
+      const meta = await fetchPoolMetadata(bech32Id);
+      if (!meta) return null;
+      const displayName = meta.ticker ?? meta.name;
+      if (!displayName) return null;
+      return {
+        displayName,
+        fullName: meta.name ?? undefined,
+        description: meta.description ?? undefined,
+        homepage: meta.homepage ?? undefined,
+        type: "pool",
+      };
     }
   }
 }

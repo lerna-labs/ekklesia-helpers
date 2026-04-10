@@ -17,6 +17,7 @@ coverage/
 .env
 .env.*
 !.env.example
+!.local.env.example
 .npmrc
 
 # OS
