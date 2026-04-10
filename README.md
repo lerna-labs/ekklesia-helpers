@@ -32,7 +32,7 @@ import { validateAddress, verifySignature } from "@ekklesia/helpers";
 import { validateAddress } from "@ekklesia/helpers/validation";
 import { verifySignature } from "@ekklesia/helpers/crypto";
 import { verifyToken } from "@ekklesia/helpers/auth";
-import { fetchCalidusKey, verifyDeposit } from "@ekklesia/helpers/cardano";
+import { fetchName, fetchIdentity, verifyDeposit } from "@ekklesia/helpers/cardano";
 import { connectToDatabase, loadRoutes } from "@ekklesia/helpers/server";
 ```
 
@@ -53,6 +53,21 @@ if (typeof result === "string") {
 import { verifySignature } from "@ekklesia/helpers/crypto";
 
 const isValid = await verifySignature(payload, address, signatureObject);
+```
+
+### Example: Resolve a Cardano identity
+
+```ts
+import { fetchName, fetchIdentity } from "@ekklesia/helpers/cardano";
+
+// Simple name lookup
+await fetchName("pool1qqqqqdk4zh..."); // "ATADA"
+await fetchName("drep1y2200we9c9..."); // "YUTA"
+await fetchName("stake1uxekfkqgs4..."); // "426"
+
+// Rich identity with metadata
+await fetchIdentity("pool1qqqqqdk4zh...");
+// { displayName: "ATADA", fullName: "ATADA Stakepool in Austria", description: "...", homepage: "https://stakepool.at", type: "pool" }
 ```
 
 ## API
@@ -84,15 +99,19 @@ const isValid = await verifySignature(payload, address, signatureObject);
 
 ### Cardano (`@ekklesia/helpers/cardano`)
 
-| Export            | Description                                                   |
-| ----------------- | ------------------------------------------------------------- |
-| `getScript`       | Fetches a native script from the Koios API by script hash     |
-| `fetchCalidusKey` | Fetches the calidus (pool cold) key for a stake address       |
-| `fetchDrepName`   | Fetches the on-chain registered name for a DRep               |
-| `validateDrep`    | Validates a DRep ID and returns its registration status       |
-| `fetchHandle`     | Resolves an ADA Handle to a stake address (Handle.me + Koios) |
-| `fetchTxInfo`     | Fetches detailed transaction info from the Koios API          |
-| `verifyDeposit`   | Verifies transaction deposits and treasury donations on-chain |
+| Export              | Description                                                        |
+| ------------------- | ------------------------------------------------------------------ |
+| `getScript`         | Fetches a native script by script hash                             |
+| `fetchCalidusKey`   | Fetches the calidus (pool cold) key for a stake pool               |
+| `fetchDrepName`     | Fetches the on-chain registered name for a DRep                    |
+| `validateDrep`      | Validates a DRep ID and returns its registration status            |
+| `fetchHandle`       | Resolves an ADA Handle for an address (Handle.me + provider)       |
+| `fetchTxInfo`       | Fetches detailed transaction info                                  |
+| `fetchPoolTicker`   | Fetches a stake pool's ticker symbol                               |
+| `fetchPoolMetadata` | Fetches full pool metadata (ticker, name, description, homepage)   |
+| `fetchName`         | Resolves a human-readable name for any bech32 identifier           |
+| `fetchIdentity`     | Returns rich identity metadata (displayName, type, description...) |
+| `verifyDeposit`     | Verifies transaction deposits and treasury donations on-chain      |
 
 ### Server (`@ekklesia/helpers/server`)
 
@@ -110,12 +129,18 @@ const isValid = await verifySignature(payload, address, signatureObject);
 
 ## Environment Variables
 
-The Koios helpers (`getScript`, `fetchCalidusKey`, etc.) require:
+The Cardano helpers require at least one provider configured:
 
-| Variable    | Description            |
-| ----------- | ---------------------- |
-| `API_URL`   | Koios API base URL     |
-| `API_TOKEN` | Koios API bearer token |
+| Variable                | Description                                                    |
+| ----------------------- | -------------------------------------------------------------- |
+| `API_URL`               | Koios API base URL                                             |
+| `API_TOKEN`             | Koios API bearer token                                         |
+| `BLOCKFROST_URL`        | Blockfrost API base URL (no trailing slash)                    |
+| `BLOCKFROST_PROJECT_ID` | Blockfrost project ID                                          |
+| `NETWORK_NAME`          | Network name (`mainnet` or `preprod`)                          |
+| `PRIMARY_PROVIDER`      | Preferred provider (`koios` or `blockfrost`, default: `koios`) |
+
+If both providers are configured, the secondary is used as automatic fallback.
 
 The auth helper (`verifyToken`) requires:
 
@@ -132,6 +157,18 @@ npm run lint           # ESLint + Prettier check
 npm run lint:fix       # Auto-fix lint issues
 npm run test           # Run tests
 npm run test:coverage  # Run tests with coverage
+npm run docs           # Generate API documentation
+```
+
+## Live Tests
+
+Live integration tests run against real mainnet APIs. Copy `.local.env.example` to `.local.env` and fill in your credentials (at least one provider required):
+
+```bash
+cp .local.env.example .local.env
+# Edit .local.env with your API credentials
+
+source .local.env && LIVE_TEST=true npx vitest run --reporter=verbose src/cardano/cardanoApi.live.test.ts
 ```
 
 ## Contributing

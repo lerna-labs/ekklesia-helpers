@@ -40,7 +40,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "test:live": "LIVE_TEST=true vitest run --reporter=verbose"
+    "test:live": "LIVE_TEST=true vitest run --reporter=verbose",
+    "docs": "typedoc",
+    "docs:serve": "typedoc && npx serve docs"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com",
@@ -68,6 +70,7 @@
     "eslint-config-prettier": "^10.1.8",
     "jiti": "^2.6.1",
     "prettier": "^3.0.0",
+    "typedoc": "^0.28.18",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^3.0.0"

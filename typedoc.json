@@ -1,0 +1,20 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "tsconfig": "tsconfig.build.json",
+  "entryPoints": [
+    "src/validation/index.ts",
+    "src/crypto/index.ts",
+    "src/auth/index.ts",
+    "src/cardano/index.ts",
+    "src/server/index.ts"
+  ],
+  "entryPointStrategy": "expand",
+  "out": "docs",
+  "name": "@ekklesia/helpers",
+  "readme": "README.md",
+  "includeVersion": true,
+  "exclude": ["**/*.test.ts", "**/*.live.test.ts", "src/__fixtures__/**"],
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "categorizeByGroup": true
+}
