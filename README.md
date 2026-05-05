@@ -7,15 +7,6 @@ proposals and voting modules into a single, typed TypeScript library.
 
 ## Installation
 
-This package is published to GitHub Packages. Configure your `.npmrc`:
-
-```
-@lerna-labs:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
-```
-
-Then install:
-
 ```bash
 npm install @lerna-labs/ekklesia-helpers
 ```
