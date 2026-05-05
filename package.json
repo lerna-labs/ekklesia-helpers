@@ -1,6 +1,6 @@
 {
   "name": "@lerna-labs/ekklesia-helpers",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Shared helper functions for the Ekklesia platform",
   "type": "module",
   "sideEffects": false,
@@ -45,8 +45,8 @@
     "docs:serve": "typedoc && npx serve docs"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
   },
   "repository": {
     "type": "git",
