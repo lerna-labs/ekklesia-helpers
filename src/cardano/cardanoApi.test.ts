@@ -112,80 +112,117 @@ describe("cardanoApi", () => {
   });
 
   describe("fetchDrepName", () => {
-    it("returns name from dRepName.@value", async () => {
-      mockFetch
-        .mockResolvedValueOnce({
-          json: async () => [
-            { drep_id: "drep1abc", meta_url: "https://meta.example.com/drep.json" },
-          ],
-        })
-        .mockResolvedValueOnce({
-          json: async () => ({ body: { dRepName: { "@value": "Alice DRep" } } }),
-        });
-      const result = await fetchDrepName("drep1abc");
-      expect(result).toBe("Alice DRep");
+    const mockDrepInfo = (metaUrl: string | null) => ({
+      json: async () => [{ drep_id: "drep1abc", meta_url: metaUrl }],
+    });
+    const mockMeta = (body: unknown) => ({
+      ok: true,
+      json: async () => body,
     });
 
-    it("returns name from givenName", async () => {
+    it("returns name from dRepName.@value (typed JSON-LD)", async () => {
       mockFetch
-        .mockResolvedValueOnce({
-          json: async () => [
-            { drep_id: "drep1abc", meta_url: "https://meta.example.com/drep.json" },
-          ],
-        })
-        .mockResolvedValueOnce({
-          json: async () => ({ body: { givenName: "Bob DRep" } }),
-        });
-      const result = await fetchDrepName("drep1abc");
-      expect(result).toBe("Bob DRep");
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(mockMeta({ body: { dRepName: { "@value": "Alice DRep" } } }));
+      expect(await fetchDrepName("drep1abc")).toBe("Alice DRep");
     });
 
-    it("returns undefined when no name in metadata", async () => {
+    it("returns name from dRepName plain string", async () => {
       mockFetch
-        .mockResolvedValueOnce({
-          json: async () => [
-            { drep_id: "drep1abc", meta_url: "https://meta.example.com/drep.json" },
-          ],
-        })
-        .mockResolvedValueOnce({
-          json: async () => ({ body: {} }),
-        });
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(mockMeta({ body: { dRepName: "Alice DRep" } }));
+      expect(await fetchDrepName("drep1abc")).toBe("Alice DRep");
+    });
+
+    it("returns name from givenName plain string", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(mockMeta({ body: { givenName: "Bob DRep" } }));
+      expect(await fetchDrepName("drep1abc")).toBe("Bob DRep");
+    });
+
+    it("returns inner @value when givenName is typed JSON-LD (the leak bucket)", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(
+          mockMeta({ body: { givenName: { "@value": "CAMP", "@language": "en" } } }),
+        );
       const result = await fetchDrepName("drep1abc");
-      expect(result).toBeUndefined();
+      expect(result).toBe("CAMP");
+      expect(typeof result).toBe("string");
+    });
+
+    it("falls back to familyName when dRepName/givenName are absent", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(mockMeta({ body: { familyName: { "@value": "Nakamoto" } } }));
+      expect(await fetchDrepName("drep1abc")).toBe("Nakamoto");
+    });
+
+    it("falls back to body.name (CIP-119 organization)", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(mockMeta({ body: { name: "DRep Org" } }));
+      expect(await fetchDrepName("drep1abc")).toBe("DRep Org");
+    });
+
+    it("falls back to top-level name (pool-metadata-style)", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(mockMeta({ name: "Igud HaKohanim DRep" }));
+      expect(await fetchDrepName("drep1abc")).toBe("Igud HaKohanim DRep");
+    });
+
+    it("trims whitespace from string values", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(mockMeta({ body: { givenName: "  Vie Vie  " } }));
+      expect(await fetchDrepName("drep1abc")).toBe("Vie Vie");
+    });
+
+    it("skips empty-string values and continues the cascade", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(
+          mockMeta({ body: { dRepName: "   ", givenName: { "@value": "Fallback" } } }),
+        );
+      expect(await fetchDrepName("drep1abc")).toBe("Fallback");
+    });
+
+    it("returns undefined when no recognized name field is present", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce(mockMeta({ body: {} }));
+      expect(await fetchDrepName("drep1abc")).toBeUndefined();
     });
 
     it("returns undefined when no meta_url", async () => {
-      mockFetch.mockResolvedValueOnce({
-        json: async () => [{ drep_id: "drep1abc", meta_url: null }],
-      });
-      const result = await fetchDrepName("drep1abc");
-      expect(result).toBeUndefined();
+      mockFetch.mockResolvedValueOnce(mockDrepInfo(null));
+      expect(await fetchDrepName("drep1abc")).toBeUndefined();
     });
 
     it("returns null when no DRep found", async () => {
-      mockFetch.mockResolvedValueOnce({
-        json: async () => [],
-      });
-      const result = await fetchDrepName("drep1nonexistent");
-      expect(result).toBeNull();
+      mockFetch.mockResolvedValueOnce({ json: async () => [] });
+      expect(await fetchDrepName("drep1nonexistent")).toBeNull();
     });
 
-    it("returns undefined when metadata fetch fails", async () => {
+    it("returns undefined when metadata fetch throws", async () => {
       mockFetch
-        .mockResolvedValueOnce({
-          json: async () => [
-            { drep_id: "drep1abc", meta_url: "https://meta.example.com/drep.json" },
-          ],
-        })
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
         .mockRejectedValueOnce(new Error("Metadata fetch failed"));
-      const result = await fetchDrepName("drep1abc");
-      expect(result).toBeUndefined();
+      expect(await fetchDrepName("drep1abc")).toBeUndefined();
+    });
+
+    it("returns undefined when metadata URL returns non-2xx", async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo("https://meta.example.com/drep.json"))
+        .mockResolvedValueOnce({ ok: false, status: 404 });
+      expect(await fetchDrepName("drep1abc")).toBeUndefined();
     });
 
     it("returns null on primary fetch error", async () => {
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
-      const result = await fetchDrepName("drep1abc");
-      expect(result).toBeNull();
+      expect(await fetchDrepName("drep1abc")).toBeNull();
     });
   });
 
@@ -391,7 +428,118 @@ describe("cardanoApi", () => {
         name: "Stake Nuts",
         homepage: "https://stakenuts.com",
         description: "The best pool",
+        meta_url: null,
       });
+    });
+
+    it("recovers ticker via direct fetch when Koios meta_json is null", async () => {
+      // Koios /pool_info returns the pool with meta_url set but meta_json: null
+      mockFetch
+        .mockResolvedValueOnce({
+          json: async () => [
+            {
+              pool_id_bech32: "pool1abc",
+              meta_url: "https://meta.example.com/pool.json",
+              meta_json: null,
+            },
+          ],
+        })
+        // Direct fetch returns a usable CIP-006 document
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            ticker: "RECV",
+            name: "Recovered Pool",
+            description: "Came back via direct fetch",
+            homepage: "https://recovered.example.com",
+          }),
+        });
+      const result = await fetchPoolMetadata("pool1abc");
+      expect(result).toEqual({
+        pool_id: "pool1abc",
+        ticker: "RECV",
+        name: "Recovered Pool",
+        description: "Came back via direct fetch",
+        homepage: "https://recovered.example.com",
+        meta_url: "https://meta.example.com/pool.json",
+      });
+    });
+
+    it("skips direct fetch when ticker is already populated", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_url: "https://meta.example.com/pool.json",
+            meta_json: {
+              ticker: "NUTS",
+              name: null,
+              homepage: null,
+              description: null,
+            },
+          },
+        ],
+      });
+      const result = await fetchPoolMetadata("pool1abc");
+      expect(result?.ticker).toBe("NUTS");
+      // Only the Koios call should have happened — no recovery fetch
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("returns Koios record unchanged when direct fetch fails", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          json: async () => [
+            {
+              pool_id_bech32: "pool1abc",
+              meta_url: "https://parked.example.com/pool.json",
+              meta_json: null,
+            },
+          ],
+        })
+        .mockResolvedValueOnce({ ok: false, status: 404 });
+      const result = await fetchPoolMetadata("pool1abc");
+      expect(result).toEqual({
+        pool_id: "pool1abc",
+        ticker: null,
+        name: null,
+        description: null,
+        homepage: null,
+        meta_url: "https://parked.example.com/pool.json",
+      });
+    });
+
+    it("returns Koios record unchanged when direct fetch throws", async () => {
+      mockFetch
+        .mockResolvedValueOnce({
+          json: async () => [
+            {
+              pool_id_bech32: "pool1abc",
+              meta_url: "https://dead.example.com/pool.json",
+              meta_json: null,
+            },
+          ],
+        })
+        .mockRejectedValueOnce(new Error("ENOTFOUND"));
+      const result = await fetchPoolMetadata("pool1abc");
+      expect(result?.ticker).toBeNull();
+      expect(result?.name).toBeNull();
+    });
+
+    it("skips direct fetch when meta_url is not registered", async () => {
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          {
+            pool_id_bech32: "pool1abc",
+            meta_url: null,
+            meta_json: null,
+          },
+        ],
+      });
+      const result = await fetchPoolMetadata("pool1abc");
+      expect(result?.ticker).toBeNull();
+      expect(result?.name).toBeNull();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it("returns null when pool not found", async () => {
@@ -448,6 +596,7 @@ describe("cardanoApi", () => {
           ],
         })
         .mockResolvedValueOnce({
+          ok: true,
           json: async () => ({ body: { givenName: "Alice DRep" } }),
         });
       const result = await fetchName("drep1abc");
@@ -565,6 +714,7 @@ describe("cardanoApi", () => {
           json: async () => [{ drep_id: "drep1abc", meta_url: "https://meta.example.com" }],
         })
         .mockResolvedValueOnce({
+          ok: true,
           json: async () => ({ body: { givenName: "Alice DRep" } }),
         });
       const result = await fetchIdentity("drep1abc");

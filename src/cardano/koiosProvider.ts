@@ -32,6 +32,7 @@ export function getKoiosConfig(): KoiosConfig {
 /** Koios pool info response shape (relevant fields only). */
 interface KoiosPoolInfo {
   pool_id_bech32: string;
+  meta_url: string | null;
   meta_json: {
     name: string;
     ticker: string;
@@ -82,6 +83,7 @@ export class KoiosProvider implements CardanoProvider {
       name: pool.meta_json?.name ?? null,
       description: pool.meta_json?.description ?? null,
       homepage: pool.meta_json?.homepage ?? null,
+      meta_url: pool.meta_url ?? null,
     };
   }
 

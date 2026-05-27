@@ -16,6 +16,13 @@ export interface PoolMetadata {
   name: string | null;
   description: string | null;
   homepage: string | null;
+  /**
+   * Off-chain metadata URL registered on-chain. Present when the operator
+   * declared one, regardless of whether the upstream provider was able to
+   * fetch + parse it. May be used by callers (or {@link fetchPoolMetadata})
+   * to attempt direct recovery when `ticker`/`name` are null.
+   */
+  meta_url: string | null;
 }
 
 /** Thrown when a provider does not support a given operation. */
