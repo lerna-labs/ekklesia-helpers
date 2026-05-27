@@ -192,10 +192,50 @@ export async function fetchCalidusKey(poolBech32: string): Promise<CalidusKey | 
 }
 
 /**
+ * Coerces a CIP-100 metadata field value to a trimmed string.
+ *
+ * Accepts either a plain string or a JSON-LD typed value object of the form
+ * `{ "@value": "..." }`. Returns `undefined` for anything else (objects without
+ * a usable `@value`, empty strings, non-strings, `null`/`undefined`).
+ */
+function coerceMetadataString(v: unknown): string | undefined {
+  if (typeof v === "string") {
+    const trimmed = v.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+  if (v && typeof v === "object" && "@value" in v) {
+    return coerceMetadataString((v as { "@value": unknown })["@value"]);
+  }
+  return undefined;
+}
+
+/**
+ * Priority-ordered readers for the name field on a DRep metadata document.
+ *
+ * Order reflects mainnet frequency (see `.claude/trds/SHARED_FETCH_DREP_NAME_ROBUSTNESS.md`):
+ * `body.dRepName` and `body.givenName` cover ~95% of registrations, with
+ * `body.familyName`, `body.name`, and top-level `name` as CIP-119 / pool-style
+ * fallbacks for outliers.
+ */
+const DREP_NAME_READERS: readonly ((m: Record<string, unknown>) => unknown)[] = [
+  (m) => (m.body as Record<string, unknown> | undefined)?.dRepName,
+  (m) => (m.body as Record<string, unknown> | undefined)?.givenName,
+  (m) => (m.body as Record<string, unknown> | undefined)?.familyName,
+  (m) => (m.body as Record<string, unknown> | undefined)?.name,
+  (m) => m.name,
+];
+
+/**
  * Fetches the DRep name for a given DRep ID.
  *
+ * Walks a priority cascade across CIP-100 / CIP-119 metadata shapes
+ * (`body.dRepName`, `body.givenName`, `body.familyName`, `body.name`,
+ * top-level `name`) and accepts each as either a plain string or a JSON-LD
+ * typed value (`{ "@value": "..." }`).
+ *
  * @param drepId - The DRep ID in bech32 format.
- * @returns The DRep name if found, `undefined` if metadata lacks a name, `null` on error.
+ * @returns The DRep name if found, `undefined` if metadata lacks a usable name
+ *   (or is unreachable / not JSON), `null` on provider error or unknown DRep.
  *
  * @example
  * ```ts
@@ -203,46 +243,38 @@ export async function fetchCalidusKey(poolBech32: string): Promise<CalidusKey | 
  * ```
  */
 export async function fetchDrepName(drepId: string): Promise<string | undefined | null> {
+  let info: DrepInfo[];
   try {
     const { primary, secondary } = getProviders();
-    const data = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
-
-    if (data.length === 0) {
-      console.log("No DRep found");
-      return null;
-    }
-
-    if (!data[0].meta_url) {
-      console.log("No DRep metadata URL found");
-      return undefined;
-    }
-
-    try {
-      console.log("Fetching DRep metadata:", data[0].meta_url);
-      const metaResponse = await fetch(data[0].meta_url, {
-        method: "GET",
-        headers: { "Content-Type": "application/json" },
-      });
-      const metadata = (await metaResponse.json()) as {
-        body?: { dRepName?: { "@value"?: string }; givenName?: string };
-      };
-
-      if (metadata.body?.dRepName?.["@value"]) {
-        return metadata.body.dRepName["@value"];
-      } else if (metadata.body?.givenName) {
-        return metadata.body.givenName;
-      } else {
-        console.log("No DRep name found");
-        return undefined;
-      }
-    } catch (error) {
-      console.error("Error fetching DRep metadata:", error);
-      return undefined;
-    }
+    info = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
   } catch (error) {
     console.error("Error fetching DRep name:", error);
     return null;
   }
+
+  if (info.length === 0) return null;
+  if (!info[0].meta_url) return undefined;
+
+  let metadata: Record<string, unknown>;
+  try {
+    const metaResponse = await fetch(info[0].meta_url, {
+      method: "GET",
+      headers: { Accept: "application/json, application/ld+json, */*" },
+    });
+    if (!metaResponse.ok) return undefined;
+    metadata = (await metaResponse.json()) as Record<string, unknown>;
+  } catch (error) {
+    console.error("Error fetching DRep metadata:", error);
+    return undefined;
+  }
+
+  if (!metadata || typeof metadata !== "object") return undefined;
+
+  for (const reader of DREP_NAME_READERS) {
+    const value = coerceMetadataString(reader(metadata));
+    if (value) return value;
+  }
+  return undefined;
 }
 
 /**
@@ -335,7 +367,68 @@ export async function fetchPoolTicker(poolBech32: string): Promise<string | null
 }
 
 /**
+ * Tight per-call timeout for the off-chain recovery fetch in {@link fetchPoolMetadata}.
+ *
+ * Kept short on purpose: a mainnet survey (see `.claude/pools-mainnet-survey.json`)
+ * found that ~26% of all live pool lookups hit this path, and ~87% of those URLs
+ * are dead, parked, or return HTML — Koios already exhausted its retries before
+ * surfacing `meta_json: null` to us. A 3s ceiling keeps the worst-case
+ * caller-visible latency bounded while still capturing the ~13% of recovery
+ * candidates that genuinely respond.
+ */
+const POOL_META_RECOVERY_TIMEOUT_MS = 3_000;
+
+/**
+ * Shape of a pool's off-chain metadata document per CIP-006.
+ * All fields are optional in the wild.
+ */
+interface PoolOffChainMetadata {
+  ticker?: unknown;
+  name?: unknown;
+  description?: unknown;
+  homepage?: unknown;
+}
+
+/**
+ * Try to fetch and parse a pool's off-chain metadata document directly.
+ *
+ * Returns `null` for any failure (timeout, non-2xx, non-JSON, empty body).
+ * Never throws.
+ */
+async function fetchPoolMetadataDirect(metaUrl: string): Promise<PoolOffChainMetadata | null> {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), POOL_META_RECOVERY_TIMEOUT_MS);
+  try {
+    const response = await fetch(metaUrl, {
+      signal: ac.signal,
+      headers: { Accept: "application/json, */*" },
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as PoolOffChainMetadata;
+    if (!body || typeof body !== "object") return null;
+    return body;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function asPoolField(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const trimmed = v.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+/**
  * Fetches full pool metadata by bech32 pool ID.
+ *
+ * When the configured provider returns a pool record whose `ticker` and `name`
+ * are both null but whose `meta_url` is registered on-chain, this helper makes
+ * a single best-effort direct fetch of the metadata document (bounded by
+ * {@link POOL_META_RECOVERY_TIMEOUT_MS}) and merges in any string fields it
+ * finds. This recovers ~13% of the otherwise-blank-metadata pools (mainnet
+ * survey 2026-05-27) without disturbing the happy path.
  *
  * @param poolBech32 - The pool ID in bech32 format (e.g., `"pool1..."`).
  * @returns The pool metadata if found, `null` otherwise.
@@ -347,13 +440,28 @@ export async function fetchPoolTicker(poolBech32: string): Promise<string | null
  * ```
  */
 export async function fetchPoolMetadata(poolBech32: string): Promise<PoolMetadata | null> {
+  let meta: PoolMetadata | null;
   try {
     const { primary, secondary } = getProviders();
-    return await withFallback(primary, secondary, (p) => p.fetchPoolMetadata(poolBech32));
+    meta = await withFallback(primary, secondary, (p) => p.fetchPoolMetadata(poolBech32));
   } catch (error) {
     console.error("Error fetching pool metadata:", error);
     return null;
   }
+
+  if (!meta) return null;
+  if (meta.ticker || meta.name || !meta.meta_url) return meta;
+
+  const recovered = await fetchPoolMetadataDirect(meta.meta_url);
+  if (!recovered) return meta;
+
+  return {
+    ...meta,
+    ticker: meta.ticker ?? asPoolField(recovered.ticker),
+    name: meta.name ?? asPoolField(recovered.name),
+    description: meta.description ?? asPoolField(recovered.description),
+    homepage: meta.homepage ?? asPoolField(recovered.homepage),
+  };
 }
 
 /** Bech32 prefixes that {@link fetchName} can resolve. */

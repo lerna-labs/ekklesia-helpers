@@ -159,6 +159,7 @@ export class BlockfrostProvider implements CardanoProvider {
       name: data.name,
       description: data.description,
       homepage: data.homepage,
+      meta_url: data.url,
     };
   }
 
