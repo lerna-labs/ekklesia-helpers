@@ -25,6 +25,7 @@ import { verifySignature } from "@lerna-labs/ekklesia-helpers/crypto";
 import { verifyToken } from "@lerna-labs/ekklesia-helpers/auth";
 import { fetchName, fetchIdentity, verifyDeposit } from "@lerna-labs/ekklesia-helpers/cardano";
 import { connectToDatabase, loadRoutes } from "@lerna-labs/ekklesia-helpers/server";
+import { canonicalize, canonicalBytes } from "@lerna-labs/ekklesia-helpers/json";
 ```
 
 ### Example: Validate a Cardano address
@@ -117,6 +118,28 @@ await fetchIdentity("pool1qqqqqdk4zh...");
 | `checkDatabaseConnectionMW` | Express middleware that returns 503 if database is down   |
 | `loadEnvironmentVariables`  | Loads `.env.{NODE_ENV}` files with fallback to `.env`     |
 | `loadRoutes`                | Recursively loads Express route files from a directory    |
+
+### Canonical JSON (`@lerna-labs/ekklesia-helpers/json`)
+
+| Export           | Description                                                        |
+| ---------------- | ------------------------------------------------------------------ |
+| `canonicalize`   | Serializes a value to canonical JSON (RFC 8785 / JCS), sorted keys |
+| `canonicalBytes` | Returns the UTF-8 bytes of `canonicalize(value)` (a `Uint8Array`)  |
+
+`canonicalize` produces a deterministic, whitespace-free string that is
+**byte-for-byte stable regardless of key insertion order** — it is the canonical
+byte target for signing and hashing (e.g. blake2b `voteHash` / `merkleRoot`).
+The output follows [RFC 8785](https://www.rfc-editor.org/rfc/rfc8785) so that
+implementations in other languages interoperate. Object keys are sorted by
+UTF-16 code unit, array order is preserved, and non-finite numbers
+(`NaN`/`Infinity`) are rejected with a `TypeError`.
+
+```ts
+import { canonicalize, canonicalBytes } from "@lerna-labs/ekklesia-helpers/json";
+
+canonicalize({ b: 1, a: 2 }); // '{"a":2,"b":1}'
+canonicalBytes({ b: 1, a: 2 }); // Uint8Array of the UTF-8 bytes, ready to hash
+```
 
 ## Environment Variables
 

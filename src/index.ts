@@ -71,3 +71,6 @@ export {
   loadEnvironmentVariables,
   loadRoutes,
 } from "./server/index.js";
+
+// JSON
+export { canonicalize, canonicalBytes } from "./json/index.js";
