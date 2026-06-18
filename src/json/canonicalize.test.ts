@@ -106,16 +106,16 @@ describe("canonicalize", () => {
 
   it("conforms to the RFC 8785 Unicode key-sorting example", () => {
     // RFC 8785 Appendix B sorting example: keys sorted by UTF-16 code unit.
-    // All keys/values use explicit \u escapes so the source is unambiguous
-    // (no normalization-form dependence on how the editor stored the bytes).
+    // Input keys and the expected substrings use identical literal characters
+    // (written once here), so they match regardless of Unicode normalization form.
     const input = {
       "€": "Euro Sign", // €
       "\r": "Carriage Return", // U+000D
-      "דּ": "Hebrew Letter Dalet With Dagesh", // precomposed
+      דּ: "Hebrew Letter Dalet With Dagesh", // precomposed
       "1": "One",
       "😀": "Emoji: Grinning Face", // 😀
       "": "Control",
-      "ö": "Latin Small Letter O With Diaeresis", // ö
+      ö: "Latin Small Letter O With Diaeresis", // ö
     };
     // Sorted first code units: 0x000D < 0x0031 < 0x0080 < 0x00F6 < 0x20AC < 0xD83D < 0xFB33.
     // JSON/RFC 8785 escape only U+0000–U+001F (so \r is escaped; U+0080 is literal).
@@ -191,7 +191,7 @@ describe("canonicalBytes", () => {
   });
 
   it("encodes non-ASCII keys and values as UTF-8", () => {
-    const input = { "ключ": "знач", emoji: "😀" };
+    const input = { ключ: "знач", emoji: "😀" };
     const bytes = canonicalBytes(input);
     expect(new TextDecoder().decode(bytes)).toBe(canonicalize(input));
     // Multi-byte content means more bytes than UTF-16 code units in the string.
