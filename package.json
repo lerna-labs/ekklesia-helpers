@@ -1,6 +1,6 @@
 {
   "name": "@lerna-labs/ekklesia-helpers",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Shared helper functions for the Ekklesia platform",
   "type": "module",
   "sideEffects": false,
@@ -28,6 +28,10 @@
     "./server": {
       "types": "./dist/server/index.d.ts",
       "import": "./dist/server/index.js"
+    },
+    "./json": {
+      "types": "./dist/json/index.d.ts",
+      "import": "./dist/json/index.js"
     }
   },
   "files": [

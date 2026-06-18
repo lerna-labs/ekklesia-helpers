@@ -6,7 +6,8 @@
     "src/crypto/index.ts",
     "src/auth/index.ts",
     "src/cardano/index.ts",
-    "src/server/index.ts"
+    "src/server/index.ts",
+    "src/json/index.ts"
   ],
   "entryPointStrategy": "expand",
   "out": "docs",
