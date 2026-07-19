@@ -12,13 +12,13 @@ const originalConsoleInfo = console.info;
 const originalConsoleDebug = console.debug;
 
 const colors = {
-  reset: "\x1b[0m",
-  bright: "\x1b[1m",
-  red: "\x1b[31m",
-  green: "\x1b[32m",
-  yellow: "\x1b[33m",
-  cyan: "\x1b[36m",
-  magenta: "\x1b[35m",
+  reset: '\x1b[0m',
+  bright: '\x1b[1m',
+  red: '\x1b[31m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+  magenta: '\x1b[35m',
 } as const;
 
 /**
@@ -33,23 +33,23 @@ const colors = {
  */
 export function initializeConsole(): void {
   console.log = (...args: unknown[]) => {
-    originalConsoleLog(colors.green + "INFO:" + colors.reset, ...args);
+    originalConsoleLog(colors.green + 'INFO:' + colors.reset, ...args);
   };
 
   console.error = (...args: unknown[]) => {
-    originalConsoleError(colors.red + colors.bright + "ERROR:" + colors.reset, ...args);
+    originalConsoleError(colors.red + colors.bright + 'ERROR:' + colors.reset, ...args);
   };
 
   console.warn = (...args: unknown[]) => {
-    originalConsoleWarn(colors.yellow + "WARN:" + colors.reset, ...args);
+    originalConsoleWarn(colors.yellow + 'WARN:' + colors.reset, ...args);
   };
 
   console.info = (...args: unknown[]) => {
-    originalConsoleInfo(colors.cyan + "INFO:" + colors.reset, ...args);
+    originalConsoleInfo(colors.cyan + 'INFO:' + colors.reset, ...args);
   };
 
   console.debug = (...args: unknown[]) => {
-    originalConsoleDebug(colors.magenta + "DEBUG:" + colors.reset, ...args);
+    originalConsoleDebug(colors.magenta + 'DEBUG:' + colors.reset, ...args);
   };
 }
 

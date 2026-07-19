@@ -7,12 +7,12 @@
  * @module cardano/cardanoApi
  */
 
-import { ScriptHash } from "@emurgo/cardano-serialization-lib-nodejs";
+import { ScriptHash } from '@emurgo/cardano-serialization-lib-nodejs';
 
-import type { CardanoProvider, PoolMetadata } from "./provider.js";
-import { withFallback } from "./provider.js";
-import { KoiosProvider, getKoiosConfig } from "./koiosProvider.js";
-import { BlockfrostProvider, getBlockfrostConfig } from "./blockfrostProvider.js";
+import type { CardanoProvider, PoolMetadata } from './provider.js';
+import { withFallback } from './provider.js';
+import { KoiosProvider, getKoiosConfig } from './koiosProvider.js';
+import { BlockfrostProvider, getBlockfrostConfig } from './blockfrostProvider.js';
 
 /** Calidus key record. */
 export interface CalidusKey {
@@ -63,7 +63,7 @@ export interface NameResult {
   fullName?: string;
   description?: string;
   homepage?: string;
-  type: "pool" | "drep" | "handle";
+  type: 'pool' | 'drep' | 'handle';
 }
 
 /** DRep info record. */
@@ -103,13 +103,13 @@ function getProviders(): { primary: CardanoProvider; secondary: CardanoProvider 
       /* Blockfrost not configured */
     }
 
-    const preferBlockfrost = process.env.PRIMARY_PROVIDER === "blockfrost";
+    const preferBlockfrost = process.env.PRIMARY_PROVIDER === 'blockfrost';
     _primary = (preferBlockfrost ? (blockfrost ?? koios) : (koios ?? blockfrost)) ?? null;
     _secondary = _primary === koios ? blockfrost : koios;
 
     if (!_primary) {
       throw new Error(
-        "No Cardano provider configured. Set API_URL/API_TOKEN (Koios) or BLOCKFROST_URL/BLOCKFROST_PROJECT_ID (Blockfrost).",
+        'No Cardano provider configured. Set API_URL/API_TOKEN (Koios) or BLOCKFROST_URL/BLOCKFROST_PROJECT_ID (Blockfrost).',
       );
     }
   }
@@ -152,7 +152,7 @@ export async function getScript(scriptHash: string): Promise<Record<string, unkn
     ScriptHash.from_hex(scriptHash);
   } catch (_error) {
     console.error(`Not a valid script hash: ${scriptHash}`);
-    throw new Error("Not a valid script hash");
+    throw new Error('Not a valid script hash');
   }
 
   const { primary, secondary } = getProviders();
@@ -160,7 +160,7 @@ export async function getScript(scriptHash: string): Promise<Record<string, unkn
   try {
     return await withFallback(primary, secondary, (p) => p.fetchScript(scriptHash));
   } catch (error) {
-    console.log("Error fetching script hash:", scriptHash);
+    console.log('Error fetching script hash:', scriptHash);
     console.error(error);
   }
 
@@ -186,7 +186,7 @@ export async function fetchCalidusKey(poolBech32: string): Promise<CalidusKey | 
     const { primary, secondary } = getProviders();
     return await withFallback(primary, secondary, (p) => p.fetchCalidusKey(poolBech32));
   } catch (error) {
-    console.error("Error fetching Calidus key:", error);
+    console.error('Error fetching Calidus key:', error);
     return null;
   }
 }
@@ -199,12 +199,12 @@ export async function fetchCalidusKey(poolBech32: string): Promise<CalidusKey | 
  * a usable `@value`, empty strings, non-strings, `null`/`undefined`).
  */
 function coerceMetadataString(v: unknown): string | undefined {
-  if (typeof v === "string") {
+  if (typeof v === 'string') {
     const trimmed = v.trim();
     return trimmed.length > 0 ? trimmed : undefined;
   }
-  if (v && typeof v === "object" && "@value" in v) {
-    return coerceMetadataString((v as { "@value": unknown })["@value"]);
+  if (v && typeof v === 'object' && '@value' in v) {
+    return coerceMetadataString((v as { '@value': unknown })['@value']);
   }
   return undefined;
 }
@@ -248,7 +248,7 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
     const { primary, secondary } = getProviders();
     info = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
   } catch (error) {
-    console.error("Error fetching DRep name:", error);
+    console.error('Error fetching DRep name:', error);
     return null;
   }
 
@@ -258,17 +258,17 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
   let metadata: Record<string, unknown>;
   try {
     const metaResponse = await fetch(info[0].meta_url, {
-      method: "GET",
-      headers: { Accept: "application/json, application/ld+json, */*" },
+      method: 'GET',
+      headers: { Accept: 'application/json, application/ld+json, */*' },
     });
     if (!metaResponse.ok) return undefined;
     metadata = (await metaResponse.json()) as Record<string, unknown>;
   } catch (error) {
-    console.error("Error fetching DRep metadata:", error);
+    console.error('Error fetching DRep metadata:', error);
     return undefined;
   }
 
-  if (!metadata || typeof metadata !== "object") return undefined;
+  if (!metadata || typeof metadata !== 'object') return undefined;
 
   for (const reader of DREP_NAME_READERS) {
     const value = coerceMetadataString(reader(metadata));
@@ -294,7 +294,7 @@ export async function validateDrep(drepId: string): Promise<boolean> {
     const data = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
     return data.length > 0;
   } catch (error) {
-    console.error("Error validating DRep:", error);
+    console.error('Error validating DRep:', error);
     return false;
   }
 }
@@ -316,7 +316,7 @@ export async function fetchHandle(address: string): Promise<string | null> {
     return await withFallback(primary, secondary, (p) => p.fetchHandle(address));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error("Error fetching handle:", message);
+    console.error('Error fetching handle:', message);
     return null;
   }
 }
@@ -338,7 +338,7 @@ export async function fetchTxInfo(txHash: string): Promise<TxInfo | null> {
     const { primary, secondary } = getProviders();
     return await withFallback(primary, secondary, (p) => p.fetchTxInfo(txHash));
   } catch (error) {
-    console.error("Error fetching tx info:", error);
+    console.error('Error fetching tx info:', error);
     return null;
   }
 }
@@ -361,7 +361,7 @@ export async function fetchPoolTicker(poolBech32: string): Promise<string | null
     const metadata = await withFallback(primary, secondary, (p) => p.fetchPoolMetadata(poolBech32));
     return metadata?.ticker ?? null;
   } catch (error) {
-    console.error("Error fetching pool ticker:", error);
+    console.error('Error fetching pool ticker:', error);
     return null;
   }
 }
@@ -401,11 +401,11 @@ async function fetchPoolMetadataDirect(metaUrl: string): Promise<PoolOffChainMet
   try {
     const response = await fetch(metaUrl, {
       signal: ac.signal,
-      headers: { Accept: "application/json, */*" },
+      headers: { Accept: 'application/json, */*' },
     });
     if (!response.ok) return null;
     const body = (await response.json()) as PoolOffChainMetadata;
-    if (!body || typeof body !== "object") return null;
+    if (!body || typeof body !== 'object') return null;
     return body;
   } catch {
     return null;
@@ -415,7 +415,7 @@ async function fetchPoolMetadataDirect(metaUrl: string): Promise<PoolOffChainMet
 }
 
 function asPoolField(v: unknown): string | null {
-  if (typeof v !== "string") return null;
+  if (typeof v !== 'string') return null;
   const trimmed = v.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
@@ -445,7 +445,7 @@ export async function fetchPoolMetadata(poolBech32: string): Promise<PoolMetadat
     const { primary, secondary } = getProviders();
     meta = await withFallback(primary, secondary, (p) => p.fetchPoolMetadata(poolBech32));
   } catch (error) {
-    console.error("Error fetching pool metadata:", error);
+    console.error('Error fetching pool metadata:', error);
     return null;
   }
 
@@ -465,15 +465,15 @@ export async function fetchPoolMetadata(poolBech32: string): Promise<PoolMetadat
 }
 
 /** Bech32 prefixes that {@link fetchName} can resolve. */
-type NameablePrefix = "addr" | "addr_test" | "stake" | "stake_test" | "drep" | "pool";
+type NameablePrefix = 'addr' | 'addr_test' | 'stake' | 'stake_test' | 'drep' | 'pool';
 
 const NAMEABLE_PREFIXES: NameablePrefix[] = [
-  "addr_test",
-  "stake_test",
-  "addr",
-  "stake",
-  "drep",
-  "pool",
+  'addr_test',
+  'stake_test',
+  'addr',
+  'stake',
+  'drep',
+  'pool',
 ];
 
 /**
@@ -504,16 +504,16 @@ export async function fetchName(bech32Id: string): Promise<string | null> {
   }
 
   switch (prefix) {
-    case "addr":
-    case "addr_test":
-    case "stake":
-    case "stake_test":
+    case 'addr':
+    case 'addr_test':
+    case 'stake':
+    case 'stake_test':
       return fetchHandle(bech32Id);
 
-    case "drep":
+    case 'drep':
       return (await fetchDrepName(bech32Id)) ?? null;
 
-    case "pool": {
+    case 'pool': {
       const meta = await fetchPoolMetadata(bech32Id);
       return meta?.ticker ?? meta?.name ?? null;
     }
@@ -544,20 +544,20 @@ export async function fetchIdentity(bech32Id: string): Promise<NameResult | null
   }
 
   switch (prefix) {
-    case "addr":
-    case "addr_test":
-    case "stake":
-    case "stake_test": {
+    case 'addr':
+    case 'addr_test':
+    case 'stake':
+    case 'stake_test': {
       const handle = await fetchHandle(bech32Id);
-      return handle ? { displayName: handle, type: "handle" } : null;
+      return handle ? { displayName: handle, type: 'handle' } : null;
     }
 
-    case "drep": {
+    case 'drep': {
       const name = await fetchDrepName(bech32Id);
-      return name ? { displayName: name, type: "drep" } : null;
+      return name ? { displayName: name, type: 'drep' } : null;
     }
 
-    case "pool": {
+    case 'pool': {
       const meta = await fetchPoolMetadata(bech32Id);
       if (!meta) return null;
       const displayName = meta.ticker ?? meta.name;
@@ -567,7 +567,7 @@ export async function fetchIdentity(bech32Id: string): Promise<NameResult | null
         fullName: meta.name ?? undefined,
         description: meta.description ?? undefined,
         homepage: meta.homepage ?? undefined,
-        type: "pool",
+        type: 'pool',
       };
     }
   }

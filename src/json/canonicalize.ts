@@ -49,8 +49,8 @@
 export function canonicalize(value: unknown): string {
   // Primitives and null defer to JSON.stringify, which already produces the
   // RFC 8785 serialization for strings, booleans, null, and finite numbers.
-  if (value === null || typeof value !== "object") {
-    if (typeof value === "number" && !Number.isFinite(value)) {
+  if (value === null || typeof value !== 'object') {
+    if (typeof value === 'number' && !Number.isFinite(value)) {
       throw new TypeError(`Cannot canonicalize non-finite number: ${value}`);
     }
     return JSON.stringify(value);
@@ -58,7 +58,7 @@ export function canonicalize(value: unknown): string {
 
   // Arrays: serialize each element in place; element order is significant.
   if (Array.isArray(value)) {
-    return `[${value.map((element) => canonicalize(element)).join(",")}]`;
+    return `[${value.map((element) => canonicalize(element)).join(',')}]`;
   }
 
   // Objects: sort keys by UTF-16 code unit, drop undefined-valued properties.
@@ -67,7 +67,7 @@ export function canonicalize(value: unknown): string {
     .sort()
     .filter((key) => record[key] !== undefined)
     .map((key) => `${JSON.stringify(key)}:${canonicalize(record[key])}`);
-  return `{${parts.join(",")}}`;
+  return `{${parts.join(',')}}`;
 }
 
 /**

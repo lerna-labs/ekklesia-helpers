@@ -2,3 +2,6 @@ dist/
 node_modules/
 coverage/
 .claude/
+# Release automation -- keep in sync with the shared template, do not reformat per-repo.
+.github/
+.changeset/
