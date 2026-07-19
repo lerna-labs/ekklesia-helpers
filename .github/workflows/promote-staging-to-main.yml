@@ -4,10 +4,9 @@ name: Promote staging to main
 # alive -- the accumulator for the next production release. A human merges it
 # when staging is ready to release.
 #
-# This library publishes only from main (release.yml) via npm trusted
-# publishing; staging does not publish rc snapshots. To add `rc` dist-tag
-# previews for downstream testing later, register a staging workflow as a
-# second npm trusted publisher and add back a publish job here.
+# Publishing itself lives in publish.yml, which handles both the staging `rc`
+# snapshot and the production release from main. This workflow only opens the
+# promotion PR.
 on:
   push:
     branches: [staging]
@@ -26,7 +25,7 @@ jobs:
           client-id: ${{ vars.RELEASE_MANAGER_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_MANAGER_APP_PRIVATE_KEY }}
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
