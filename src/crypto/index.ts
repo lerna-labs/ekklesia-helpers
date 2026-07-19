@@ -6,4 +6,4 @@ export {
   type SignatureObject,
   type SignatureError,
   type ScriptCriteria,
-} from "./verifySignature.js";
+} from './verifySignature.js';

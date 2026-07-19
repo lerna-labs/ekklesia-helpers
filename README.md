@@ -17,32 +17,32 @@ Import from the root or from a specific subpath:
 
 ```ts
 // Root import
-import { validateAddress, verifySignature } from "@lerna-labs/ekklesia-helpers";
+import { validateAddress, verifySignature } from '@lerna-labs/ekklesia-helpers';
 
 // Subpath imports (better tree shaking)
-import { validateAddress } from "@lerna-labs/ekklesia-helpers/validation";
-import { verifySignature } from "@lerna-labs/ekklesia-helpers/crypto";
-import { verifyToken } from "@lerna-labs/ekklesia-helpers/auth";
-import { fetchName, fetchIdentity, verifyDeposit } from "@lerna-labs/ekklesia-helpers/cardano";
-import { connectToDatabase, loadRoutes } from "@lerna-labs/ekklesia-helpers/server";
-import { canonicalize, canonicalBytes } from "@lerna-labs/ekklesia-helpers/json";
+import { validateAddress } from '@lerna-labs/ekklesia-helpers/validation';
+import { verifySignature } from '@lerna-labs/ekklesia-helpers/crypto';
+import { verifyToken } from '@lerna-labs/ekklesia-helpers/auth';
+import { fetchName, fetchIdentity, verifyDeposit } from '@lerna-labs/ekklesia-helpers/cardano';
+import { connectToDatabase, loadRoutes } from '@lerna-labs/ekklesia-helpers/server';
+import { canonicalize, canonicalBytes } from '@lerna-labs/ekklesia-helpers/json';
 ```
 
 ### Example: Validate a Cardano address
 
 ```ts
-import { validateAddress } from "@lerna-labs/ekklesia-helpers/validation";
+import { validateAddress } from '@lerna-labs/ekklesia-helpers/validation';
 
-const result = validateAddress("stake1uxmeqz...", "stake");
-if (typeof result === "string") {
-  console.log("Valid stake address:", result);
+const result = validateAddress('stake1uxmeqz...', 'stake');
+if (typeof result === 'string') {
+  console.log('Valid stake address:', result);
 }
 ```
 
 ### Example: Verify a COSE signature
 
 ```ts
-import { verifySignature } from "@lerna-labs/ekklesia-helpers/crypto";
+import { verifySignature } from '@lerna-labs/ekklesia-helpers/crypto';
 
 const isValid = await verifySignature(payload, address, signatureObject);
 ```
@@ -50,15 +50,15 @@ const isValid = await verifySignature(payload, address, signatureObject);
 ### Example: Resolve a Cardano identity
 
 ```ts
-import { fetchName, fetchIdentity } from "@lerna-labs/ekklesia-helpers/cardano";
+import { fetchName, fetchIdentity } from '@lerna-labs/ekklesia-helpers/cardano';
 
 // Simple name lookup
-await fetchName("pool1qqqqqdk4zh..."); // "ATADA"
-await fetchName("drep1y2200we9c9..."); // "YUTA"
-await fetchName("stake1uxekfkqgs4..."); // "426"
+await fetchName('pool1qqqqqdk4zh...'); // "ATADA"
+await fetchName('drep1y2200we9c9...'); // "YUTA"
+await fetchName('stake1uxekfkqgs4...'); // "426"
 
 // Rich identity with metadata
-await fetchIdentity("pool1qqqqqdk4zh...");
+await fetchIdentity('pool1qqqqqdk4zh...');
 // { displayName: "ATADA", fullName: "ATADA Stakepool in Austria", description: "...", homepage: "https://stakepool.at", type: "pool" }
 ```
 
@@ -135,7 +135,7 @@ UTF-16 code unit, array order is preserved, and non-finite numbers
 (`NaN`/`Infinity`) are rejected with a `TypeError`.
 
 ```ts
-import { canonicalize, canonicalBytes } from "@lerna-labs/ekklesia-helpers/json";
+import { canonicalize, canonicalBytes } from '@lerna-labs/ekklesia-helpers/json';
 
 canonicalize({ b: 1, a: 2 }); // '{"a":2,"b":1}'
 canonicalBytes({ b: 1, a: 2 }); // Uint8Array of the UTF-8 bytes, ready to hash

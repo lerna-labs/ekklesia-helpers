@@ -19,7 +19,7 @@
  * ```
  */
 export function sanitizeInput(text: string): string | false {
-  if (typeof text !== "string") {
+  if (typeof text !== 'string') {
     return false;
   }
 
@@ -32,17 +32,17 @@ export function sanitizeInput(text: string): string | false {
   });
 
   // Remove HTML tags and decode HTML entities
-  let sanitizedText = tempText.replace(/<[^>]*>/g, "").replace(/&[a-zA-Z0-9#]+;/g, "");
+  let sanitizedText = tempText.replace(/<[^>]*>/g, '').replace(/&[a-zA-Z0-9#]+;/g, '');
 
   // Remove harmful special characters but preserve common useful characters
   const specialChars = /[^\w\s\n\r.,;:?!()[\]{}'"&$@#%*+=/\-_<>€£¥|~`^°]/g;
-  sanitizedText = sanitizedText.replace(specialChars, "");
+  sanitizedText = sanitizedText.replace(specialChars, '');
 
   // Remove leading and trailing whitespace
   sanitizedText = sanitizedText.trim();
 
   // Replace multiple spaces with a single space, but preserve line breaks
-  sanitizedText = sanitizedText.replace(/[ \t]+/g, " ");
+  sanitizedText = sanitizedText.replace(/[ \t]+/g, ' ');
 
   // Restore URLs
   urls.forEach((url, index) => {

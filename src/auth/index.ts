@@ -3,4 +3,4 @@ export {
   type TokenVerificationSuccess,
   type TokenVerificationError,
   type TokenVerificationResult,
-} from "./verifyToken.js";
+} from './verifyToken.js';

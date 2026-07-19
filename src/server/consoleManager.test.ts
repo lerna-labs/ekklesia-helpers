@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { initializeConsole, resetConsole } from "./consoleManager.js";
+import { initializeConsole, resetConsole } from './consoleManager.js';
 
-describe("consoleManager", () => {
+describe('consoleManager', () => {
   const origLog = console.log;
   const origError = console.error;
   const origWarn = console.warn;
@@ -17,42 +17,42 @@ describe("consoleManager", () => {
     resetConsole();
   });
 
-  describe("initializeConsole", () => {
-    it("replaces console.log", () => {
+  describe('initializeConsole', () => {
+    it('replaces console.log', () => {
       initializeConsole();
       expect(console.log).not.toBe(origLog);
     });
 
-    it("replaces console.error", () => {
+    it('replaces console.error', () => {
       initializeConsole();
       expect(console.error).not.toBe(origError);
     });
 
-    it("replaces console.warn", () => {
+    it('replaces console.warn', () => {
       initializeConsole();
       expect(console.warn).not.toBe(origWarn);
     });
 
-    it("replaces console.info", () => {
+    it('replaces console.info', () => {
       initializeConsole();
       expect(console.info).not.toBe(origInfo);
     });
 
-    it("replaces console.debug", () => {
+    it('replaces console.debug', () => {
       initializeConsole();
       expect(console.debug).not.toBe(origDebug);
     });
   });
 
-  describe("resetConsole", () => {
-    it("restores original console.log", () => {
+  describe('resetConsole', () => {
+    it('restores original console.log', () => {
       initializeConsole();
       expect(console.log).not.toBe(origLog);
       resetConsole();
       expect(console.log).toBe(origLog);
     });
 
-    it("restores all original console methods", () => {
+    it('restores all original console methods', () => {
       initializeConsole();
       resetConsole();
       expect(console.error).toBe(origError);
@@ -62,8 +62,8 @@ describe("consoleManager", () => {
     });
   });
 
-  describe("round-trip", () => {
-    it("init then reset restores original behavior", () => {
+  describe('round-trip', () => {
+    it('init then reset restores original behavior', () => {
       initializeConsole();
       resetConsole();
       expect(console.log).toBe(origLog);

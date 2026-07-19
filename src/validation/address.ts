@@ -14,8 +14,8 @@ import {
   ScriptHash,
   Address,
   Credential,
-} from "@emurgo/cardano-serialization-lib-nodejs";
-import { bech32 } from "bech32";
+} from '@emurgo/cardano-serialization-lib-nodejs';
+import { bech32 } from 'bech32';
 
 /** Error result returned when validation fails. */
 export interface AddressError {
@@ -37,7 +37,7 @@ export interface CalidusAddressResult {
   signerAddress: string;
   credential: string;
   isScript: boolean;
-  type: "calidus";
+  type: 'calidus';
 }
 
 /** Possible return types from {@link validateAddress}. */
@@ -74,7 +74,7 @@ export interface AddressTypeInfo {
  */
 export function validateAddress(signerAddress: string, signType?: string): ValidateAddressResult {
   if (!signerAddress) {
-    return { error: "Signer address missing" };
+    return { error: 'Signer address missing' };
   }
 
   let prefix: string, words: number[], words_hex: string;
@@ -83,28 +83,28 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
     const decoded = bech32.decode(signerAddress, 256);
     prefix = decoded.prefix;
     words = decoded.words;
-    words_hex = Buffer.from(bech32.fromWords(words)).toString("hex");
+    words_hex = Buffer.from(bech32.fromWords(words)).toString('hex');
   } catch (_error) {
     switch (signType) {
-      case "drep":
-      case "stake":
-      case "addr":
+      case 'drep':
+      case 'stake':
+      case 'addr':
         try {
           return pubKeyToBech32(signerAddress, signType);
         } catch (_e) {
-          return { error: "Invalid address format" };
+          return { error: 'Invalid address format' };
         }
       default:
-        return { error: "Invalid address format" };
+        return { error: 'Invalid address format' };
     }
   }
 
   if (!signType || !prefix.startsWith(signType)) {
-    return { error: "Invalid signer type" };
+    return { error: 'Invalid signer type' };
   }
 
   switch (signType) {
-    case "addr":
+    case 'addr':
       try {
         const payment_address = Address.from_hex(words_hex);
         const payment_key_type = payment_address.payment_cred()!.kind();
@@ -124,11 +124,11 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
         }
       } catch (error) {
         console.error(error);
-        return { error: "Invalid address format" };
+        return { error: 'Invalid address format' };
       }
       break;
 
-    case "stake":
+    case 'stake':
       try {
         const stake_address = Address.from_hex(words_hex);
         stake_address.network_id();
@@ -147,57 +147,57 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
           }
         }
       } catch (_error) {
-        return { error: "Invalid stake address" };
+        return { error: 'Invalid stake address' };
       }
       break;
 
-    case "drep": {
+    case 'drep': {
       const parts = getAddressType(signerAddress);
-      if ("error" in parts) return parts;
+      if ('error' in parts) return parts;
 
       let cip129_prefix: string, cip105_prefix: string, isScript: boolean;
       switch (parts.hashType) {
-        case "script":
-          cip129_prefix = "23";
-          cip105_prefix = "drep_script";
+        case 'script':
+          cip129_prefix = '23';
+          cip105_prefix = 'drep_script';
           isScript = true;
           break;
-        case "key":
-          cip129_prefix = "22";
-          cip105_prefix = "drep";
+        case 'key':
+          cip129_prefix = '22';
+          cip105_prefix = 'drep';
           isScript = false;
           break;
         default:
-          return { error: "Invalid DRep hash type" };
+          return { error: 'Invalid DRep hash type' };
       }
 
       return {
         cip105: bech32.encode(
           cip105_prefix,
-          bech32.toWords(Buffer.from(parts.keyHash, "hex")),
+          bech32.toWords(Buffer.from(parts.keyHash, 'hex')),
           256,
         ),
         cip129: bech32.encode(
-          "drep",
-          bech32.toWords(Buffer.from(cip129_prefix + parts.keyHash, "hex")),
+          'drep',
+          bech32.toWords(Buffer.from(cip129_prefix + parts.keyHash, 'hex')),
           256,
         ),
         isScript,
       };
     }
 
-    case "pool": {
+    case 'pool': {
       const key_hash = Ed25519KeyHash.from_hex(words_hex);
       Credential.from_keyhash(key_hash);
       break;
     }
 
-    case "calidus":
+    case 'calidus':
       try {
         const [header, body] = extractParts(words_hex);
         let isScript: boolean;
         switch (header) {
-          case "a1": {
+          case 'a1': {
             const key_hash = Ed25519KeyHash.from_hex(body);
             isScript = false;
             const credential = Credential.from_keyhash(key_hash);
@@ -205,10 +205,10 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
               signerAddress,
               credential: credential.to_hex(),
               isScript,
-              type: "calidus",
+              type: 'calidus',
             };
           }
-          case "a2": {
+          case 'a2': {
             const script_hash = ScriptHash.from_hex(body);
             isScript = true;
             const credential = Credential.from_scripthash(script_hash);
@@ -216,18 +216,18 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
               signerAddress,
               credential: credential.to_hex(),
               isScript,
-              type: "calidus",
+              type: 'calidus',
             };
           }
           default:
-            return { error: "Unknown Calidus prefix!" };
+            return { error: 'Unknown Calidus prefix!' };
         }
       } catch (_error) {
-        return { error: "Invalid Calidus ID" };
+        return { error: 'Invalid Calidus ID' };
       }
 
     default:
-      return { error: "Invalid signer type" };
+      return { error: 'Invalid signer type' };
   }
 
   return signerAddress;
@@ -251,7 +251,7 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
 export function getAddressType(bech32Address: string): AddressTypeInfo | AddressError {
   try {
     const { prefix, words } = bech32.decode(bech32Address, 256);
-    const body_hex = Buffer.from(bech32.fromWords(words)).toString("hex");
+    const body_hex = Buffer.from(bech32.fromWords(words)).toString('hex');
     let type: string | undefined, keyHash: string, hashType: string | undefined, keyPrefix: string;
 
     if (body_hex.length > 56) {
@@ -259,54 +259,54 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
       keyPrefix = kp;
       keyHash = keyBody;
     } else {
-      keyPrefix = "22";
+      keyPrefix = '22';
       keyHash = body_hex;
     }
 
     switch (prefix) {
-      case "pool":
-        hashType = "key";
-        type = "pool";
+      case 'pool':
+        hashType = 'key';
+        type = 'pool';
         break;
-      case "calidus":
+      case 'calidus':
         switch (keyPrefix) {
-          case "a1":
-            hashType = "key";
+          case 'a1':
+            hashType = 'key';
             break;
-          case "a2":
-            hashType = "script";
+          case 'a2':
+            hashType = 'script';
             break;
         }
-        type = "calidus";
+        type = 'calidus';
         break;
-      case "drep_script":
-        hashType = "script";
-        keyPrefix = "23";
+      case 'drep_script':
+        hashType = 'script';
+        keyPrefix = '23';
       // falls through
-      case "drep":
+      case 'drep':
         switch (keyPrefix) {
-          case "22":
-            hashType = "key";
+          case '22':
+            hashType = 'key';
             break;
-          case "23":
-            hashType = "script";
+          case '23':
+            hashType = 'script';
             break;
         }
-        type = "drep";
+        type = 'drep';
         break;
-      case "stake":
-      case "stake_test":
+      case 'stake':
+      case 'stake_test':
         switch (keyPrefix) {
-          case "e0":
-          case "e1":
-            hashType = "key";
+          case 'e0':
+          case 'e1':
+            hashType = 'key';
             break;
-          case "f0":
-          case "f1":
-            hashType = "script";
+          case 'f0':
+          case 'f1':
+            hashType = 'script';
             break;
         }
-        type = "stake";
+        type = 'stake';
         break;
     }
 
@@ -316,7 +316,7 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
       hashType: hashType!.trim(),
     };
   } catch (_error) {
-    return { error: "Not a valid bech32 address" };
+    return { error: 'Not a valid bech32 address' };
   }
 }
 
@@ -339,25 +339,25 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
  */
 export function pubKeyToBech32(
   key: string,
-  prefix: string = "drep",
+  prefix: string = 'drep',
   script: boolean = false,
 ): string | DrepAddressResult {
   let bech32id: string | false = false;
   let pubkey, keyhash, key_hex: string, credential;
 
   switch (prefix) {
-    case "addr": {
+    case 'addr': {
       const [addr_header, addr_body] = extractParts(key);
       const payment_key_hash = addr_body.substring(0, 56);
       const stake_key_hash = addr_body.substring(56);
       switch (addr_header) {
-        case "00":
-          prefix = "addr_test";
+        case '00':
+          prefix = 'addr_test';
           Ed25519KeyHash.from_hex(payment_key_hash);
           Ed25519KeyHash.from_hex(stake_key_hash);
           break;
-        case "01":
-          prefix = "addr";
+        case '01':
+          prefix = 'addr';
           Ed25519KeyHash.from_hex(payment_key_hash);
           Ed25519KeyHash.from_hex(stake_key_hash);
           break;
@@ -366,34 +366,34 @@ export function pubKeyToBech32(
       break;
     }
 
-    case "drep": {
+    case 'drep': {
       let cip105: string, isScript: boolean;
       if (key.length === 64) {
         isScript = false;
         pubkey = PublicKey.from_hex(key);
         keyhash = pubkey.hash();
-        cip105 = bech32.encode("drep", bech32.toWords(keyhash.to_bytes()), 256);
+        cip105 = bech32.encode('drep', bech32.toWords(keyhash.to_bytes()), 256);
       } else {
         isScript = true;
         const scriptHash = ScriptHash.from_hex(key);
         keyhash = scriptHash;
-        cip105 = bech32.encode("drep_script", bech32.toWords(keyhash.to_bytes()), 256);
+        cip105 = bech32.encode('drep_script', bech32.toWords(keyhash.to_bytes()), 256);
       }
       const prefix_byte = isScript ? 23 : 22;
       key_hex = prefix_byte + keyhash.to_hex();
-      const cip129 = bech32.encode("drep", bech32.toWords(Buffer.from(key_hex, "hex")), 256);
+      const cip129 = bech32.encode('drep', bech32.toWords(Buffer.from(key_hex, 'hex')), 256);
       return { cip105, cip129, isScript };
     }
 
-    case "calidus": {
+    case 'calidus': {
       let calidus_prefix: string;
       switch (script) {
         case true:
-          calidus_prefix = "a2";
+          calidus_prefix = 'a2';
           keyhash = ScriptHash.from_hex(key);
           break;
         case false:
-          calidus_prefix = "a1";
+          calidus_prefix = 'a1';
           pubkey = PublicKey.from_hex(key);
           keyhash = pubkey.hash();
           break;
@@ -404,25 +404,25 @@ export function pubKeyToBech32(
       break;
     }
 
-    case "stake": {
+    case 'stake': {
       const [header, body] = extractParts(key);
       switch (header) {
-        case "e0":
-          prefix = "stake_test";
+        case 'e0':
+          prefix = 'stake_test';
           keyhash = Ed25519KeyHash.from_hex(body);
           break;
-        case "e1":
+        case 'e1':
           keyhash = Ed25519KeyHash.from_hex(body);
           break;
-        case "f0":
-          prefix = "stake_test";
+        case 'f0':
+          prefix = 'stake_test';
           keyhash = ScriptHash.from_hex(body);
           break;
-        case "f1":
+        case 'f1':
           keyhash = ScriptHash.from_hex(body);
           break;
         default:
-          throw new Error("Invalid stake address");
+          throw new Error('Invalid stake address');
       }
       credential = Credential.from_keyhash(keyhash);
       void credential; // validate only
@@ -434,7 +434,7 @@ export function pubKeyToBech32(
       throw new Error(`Unsupported prefix: ${prefix}`);
   }
 
-  bech32id = bech32.encode(prefix, bech32.toWords(Buffer.from(key_hex!, "hex")), 256);
+  bech32id = bech32.encode(prefix, bech32.toWords(Buffer.from(key_hex!, 'hex')), 256);
   return bech32id;
 }
 
@@ -452,7 +452,7 @@ export function pubKeyToBech32(
  */
 export function extractParts(hexString: string): [string, string] {
   if (hexString.length < 2) {
-    return [hexString, ""];
+    return [hexString, ''];
   }
   return [hexString.slice(0, 2), hexString.slice(2)];
 }

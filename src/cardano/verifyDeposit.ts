@@ -4,7 +4,7 @@
  * specified stake key contributed to the transaction inputs.
  */
 
-import { fetchTxInfo } from "./cardanoApi.js";
+import { fetchTxInfo } from './cardanoApi.js';
 
 const regExpHex = /^[0-9a-fA-F]+$/;
 
@@ -46,11 +46,11 @@ export async function verifyDeposit(
   options: DepositOptions = {},
 ): Promise<true | DepositError> {
   if (!txHash || !regExpHex.test(txHash)) {
-    return { error: "Transaction hash is missing or invalid" };
+    return { error: 'Transaction hash is missing or invalid' };
   }
 
   if (!stakeAddr) {
-    return { error: "Stake address is missing" };
+    return { error: 'Stake address is missing' };
   }
 
   const { treasuryDonation, depositAddress, depositAmount } = options;
@@ -59,26 +59,26 @@ export async function verifyDeposit(
 
   if (!hasTreasuryCheck && !hasDepositCheck) {
     return {
-      error: "At least one of treasuryDonation or depositAddress/depositAmount must be provided",
+      error: 'At least one of treasuryDonation or depositAddress/depositAmount must be provided',
     };
   }
 
   if (hasDepositCheck && (!depositAddress || depositAmount == null)) {
     return {
-      error: "Both depositAddress and depositAmount are required for deposit verification",
+      error: 'Both depositAddress and depositAmount are required for deposit verification',
     };
   }
 
   const tx = await fetchTxInfo(txHash);
   if (!tx) {
-    return { error: "Transaction not found" };
+    return { error: 'Transaction not found' };
   }
 
   // Verify the stake key contributed to the transaction inputs
   const stakeKeyInInputs = tx.inputs?.some((input) => input.stake_addr === stakeAddr);
 
   if (!stakeKeyInInputs) {
-    return { error: "The specified stake key did not contribute to this transaction" };
+    return { error: 'The specified stake key did not contribute to this transaction' };
   }
 
   // Treasury donation check
