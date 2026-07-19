@@ -8,10 +8,10 @@ name: Release
 # `changeset publish` -- publishing the new version to npm, pushing the git tag,
 # and creating the GitHub Release.
 #
-# There is no prerelease mode here. Release candidates are ephemeral npm
-# snapshots published from staging (staging-rc.yml) under the `rc` dist-tag;
-# main only ever cuts clean X.Y.Z versions. Commits, the release PR, and the
-# release are attributed to the Ekklesia Release Manager App.
+# main only ever cuts clean X.Y.Z versions; there is no prerelease mode.
+# Publishing uses npm trusted publishing (OIDC), so no NPM_TOKEN is needed and
+# each release carries provenance. Commits, the release PR, and the release are
+# attributed to the Ekklesia Release Manager App.
 on:
   push:
     branches: [main]
@@ -23,6 +23,8 @@ concurrency:
 permissions:
   contents: write
   pull-requests: write
+  # OIDC token for npm trusted publishing (no NPM_TOKEN needed; adds provenance).
+  id-token: write
 
 jobs:
   release:
@@ -53,6 +55,10 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; node 20 ships npm 10.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@latest
+
       - run: npm ci
 
       - name: Create release PR or publish to npm
@@ -63,5 +69,6 @@ jobs:
           version: npm run changeset:version
           publish: npm run changeset:publish
         env:
+          # No NODE_AUTH_TOKEN: npm publishes via OIDC trusted publishing, which
+          # is configured for this workflow on the npm package.
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
