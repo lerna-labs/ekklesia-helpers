@@ -187,6 +187,9 @@ source .local.env && LIVE_TEST=true npx vitest run --reporter=verbose src/cardan
 
 ## Contributing
 
-1. Create a feature branch from `main`
+1. Create a feature branch from `development` (the integration branch)
 2. Ensure `npm run lint && npm run test:coverage && npm run build` all pass
-3. Open a pull request
+3. Add a changeset (`npx changeset`) describing your change
+4. Open a pull request into `development`
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
