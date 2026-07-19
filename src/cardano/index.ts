@@ -16,13 +16,13 @@ export {
   type TxIO,
   type TxInfo,
   type DrepInfo,
-} from "./cardanoApi.js";
+} from './cardanoApi.js';
 
 export {
   type CardanoProvider,
   type PoolMetadata,
   UnsupportedOperationError,
   ProviderError,
-} from "./provider.js";
+} from './provider.js';
 
-export { verifyDeposit, type DepositOptions, type DepositError } from "./verifyDeposit.js";
+export { verifyDeposit, type DepositOptions, type DepositError } from './verifyDeposit.js';

@@ -4,12 +4,12 @@
  * @module cardano/blockfrostProvider
  */
 
-import { Address, BaseAddress, RewardAddress } from "@emurgo/cardano-serialization-lib-nodejs";
+import { Address, BaseAddress, RewardAddress } from '@emurgo/cardano-serialization-lib-nodejs';
 
-import type { CardanoProvider } from "./provider.js";
-import { ProviderError, UnsupportedOperationError, type PoolMetadata } from "./provider.js";
-import type { CalidusKey, DrepInfo, TxIO, TxInfo } from "./cardanoApi.js";
-import { fetchHandleMe } from "./koiosProvider.js";
+import type { CardanoProvider } from './provider.js';
+import { ProviderError, UnsupportedOperationError, type PoolMetadata } from './provider.js';
+import type { CalidusKey, DrepInfo, TxIO, TxInfo } from './cardanoApi.js';
+import { fetchHandleMe } from './koiosProvider.js';
 
 /** Configuration for the Blockfrost provider. */
 export interface BlockfrostConfig {
@@ -27,8 +27,8 @@ export interface BlockfrostConfig {
 export function getBlockfrostConfig(): BlockfrostConfig {
   const url = process.env.BLOCKFROST_URL;
   const projectId = process.env.BLOCKFROST_PROJECT_ID;
-  if (!url) throw new Error("BLOCKFROST_URL is not set in the environment variables.");
-  if (!projectId) throw new Error("BLOCKFROST_PROJECT_ID is not set in the environment variables.");
+  if (!url) throw new Error('BLOCKFROST_URL is not set in the environment variables.');
+  if (!projectId) throw new Error('BLOCKFROST_PROJECT_ID is not set in the environment variables.');
   return { url, projectId, networkName: process.env.NETWORK_NAME };
 }
 
@@ -116,7 +116,7 @@ function deriveStakeAddress(bech32Addr: string): string | null {
  * Cardano data provider backed by the Blockfrost REST API.
  */
 export class BlockfrostProvider implements CardanoProvider {
-  readonly name = "Blockfrost";
+  readonly name = 'Blockfrost';
 
   constructor(private readonly config: BlockfrostConfig) {}
 
@@ -128,7 +128,7 @@ export class BlockfrostProvider implements CardanoProvider {
 
     if (!tx) return null;
 
-    const lovelaceOutput = tx.output_amount.find((a) => a.unit === "lovelace")?.quantity ?? "0";
+    const lovelaceOutput = tx.output_amount.find((a) => a.unit === 'lovelace')?.quantity ?? '0';
 
     return {
       tx_hash: tx.hash,
@@ -138,7 +138,7 @@ export class BlockfrostProvider implements CardanoProvider {
       tx_timestamp: tx.block_time,
       total_output: lovelaceOutput,
       fee: tx.fees,
-      treasury_donation: tx.treasury_donation === "0" ? null : tx.treasury_donation,
+      treasury_donation: tx.treasury_donation === '0' ? null : tx.treasury_donation,
       deposit: tx.deposit,
       inputs: utxos ? utxos.inputs.map(mapUtxoToTxIO) : [],
       outputs: utxos ? utxos.outputs.map(mapUtxoToTxIO) : [],
@@ -186,7 +186,7 @@ export class BlockfrostProvider implements CardanoProvider {
         hex: drep.hex,
         has_script: drep.has_script,
         registered: !drep.retired,
-        deposit: "0",
+        deposit: '0',
         active: !drep.expired,
         expires_epoch_no: drep.last_active_epoch ?? 0,
         amount: drep.amount,
@@ -198,7 +198,7 @@ export class BlockfrostProvider implements CardanoProvider {
   }
 
   async fetchCalidusKey(_poolBech32: string): Promise<CalidusKey | null> {
-    throw new UnsupportedOperationError(this.name, "fetchCalidusKey");
+    throw new UnsupportedOperationError(this.name, 'fetchCalidusKey');
   }
 
   async fetchHandle(address: string): Promise<string | null> {
@@ -207,7 +207,7 @@ export class BlockfrostProvider implements CardanoProvider {
       return await fetchHandleMe(address, this.config.networkName);
     } catch {
       // Blockfrost doesn't have an efficient handle asset lookup
-      throw new UnsupportedOperationError(this.name, "fetchHandle (asset fallback)");
+      throw new UnsupportedOperationError(this.name, 'fetchHandle (asset fallback)');
     }
   }
 
@@ -234,12 +234,12 @@ export class BlockfrostProvider implements CardanoProvider {
 }
 
 function mapUtxoToTxIO(utxo: BfUtxo): TxIO {
-  const lovelace = utxo.amount.find((a) => a.unit === "lovelace")?.quantity ?? "0";
+  const lovelace = utxo.amount.find((a) => a.unit === 'lovelace')?.quantity ?? '0';
   return {
     value: lovelace,
     tx_hash: utxo.tx_hash,
     tx_index: utxo.output_index,
     stake_addr: deriveStakeAddress(utxo.address),
-    payment_addr: { cred: "", bech32: utxo.address },
+    payment_addr: { cred: '', bech32: utxo.address },
   };
 }

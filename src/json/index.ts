@@ -1,1 +1,1 @@
-export { canonicalize, canonicalBytes } from "./canonicalize.js";
+export { canonicalize, canonicalBytes } from './canonicalize.js';

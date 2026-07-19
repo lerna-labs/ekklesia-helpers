@@ -1,15 +1,15 @@
-import jwt from "jsonwebtoken";
+import jwt from 'jsonwebtoken';
 
 /** Successful token verification result. Includes all decoded JWT payload fields. */
 export interface TokenVerificationSuccess {
-  status: "success";
-  message: "Token is valid";
+  status: 'success';
+  message: 'Token is valid';
   [key: string]: unknown;
 }
 
 /** Failed token verification result. */
 export interface TokenVerificationError {
-  status: "error";
+  status: 'error';
   message: string;
   code: number;
 }
@@ -50,10 +50,10 @@ export function verifyToken(req: TokenRequest): TokenVerificationResult {
   const JWT_SECRET = process.env.JWT_SECRET;
 
   if (!JWT_SECRET) {
-    console.error("JWT_SECRET is not defined in environment variables");
+    console.error('JWT_SECRET is not defined in environment variables');
     return {
-      status: "error",
-      message: "Server configuration error",
+      status: 'error',
+      message: 'Server configuration error',
       code: 500,
     };
   }
@@ -62,15 +62,15 @@ export function verifyToken(req: TokenRequest): TokenVerificationResult {
   let token = req.cookies?.token;
   if (!token) {
     const auth = req.headers?.authorization;
-    if (auth && typeof auth === "string" && auth.startsWith("Bearer ")) {
+    if (auth && typeof auth === 'string' && auth.startsWith('Bearer ')) {
       token = auth.slice(7).trim();
     }
   }
 
   if (!token) {
     return {
-      status: "error",
-      message: "No token provided",
+      status: 'error',
+      message: 'No token provided',
       code: 401,
     };
   }
@@ -78,10 +78,10 @@ export function verifyToken(req: TokenRequest): TokenVerificationResult {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    if (!decoded || typeof decoded === "string") {
+    if (!decoded || typeof decoded === 'string') {
       return {
-        status: "error",
-        message: "Invalid token format",
+        status: 'error',
+        message: 'Invalid token format',
         code: 401,
       };
     }
@@ -89,31 +89,31 @@ export function verifyToken(req: TokenRequest): TokenVerificationResult {
     // Check for at least one user identifier
     if (!decoded.userId && !decoded.voterId) {
       return {
-        status: "error",
-        message: "Invalid token format",
+        status: 'error',
+        message: 'Invalid token format',
         code: 401,
       };
     }
 
     return {
-      status: "success",
-      message: "Token is valid",
+      status: 'success',
+      message: 'Token is valid',
       ...decoded,
     };
   } catch (error) {
     if (error instanceof Error) {
-      if (error.name === "TokenExpiredError") {
-        return { status: "error", message: "Token has expired", code: 401 };
+      if (error.name === 'TokenExpiredError') {
+        return { status: 'error', message: 'Token has expired', code: 401 };
       }
-      if (error.name === "JsonWebTokenError") {
-        return { status: "error", message: "Invalid token", code: 401 };
+      if (error.name === 'JsonWebTokenError') {
+        return { status: 'error', message: 'Invalid token', code: 401 };
       }
-      console.error("Token verification error:", error.message);
+      console.error('Token verification error:', error.message);
     }
 
     return {
-      status: "error",
-      message: "Token verification failed",
+      status: 'error',
+      message: 'Token verification failed',
       code: 401,
     };
   }

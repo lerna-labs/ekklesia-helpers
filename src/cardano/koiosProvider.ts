@@ -4,9 +4,9 @@
  * @module cardano/koiosProvider
  */
 
-import type { CardanoProvider } from "./provider.js";
-import { ProviderError, type PoolMetadata } from "./provider.js";
-import type { CalidusKey, DrepInfo, TxInfo } from "./cardanoApi.js";
+import type { CardanoProvider } from './provider.js';
+import { ProviderError, type PoolMetadata } from './provider.js';
+import type { CalidusKey, DrepInfo, TxInfo } from './cardanoApi.js';
 
 /** Configuration for the Koios provider. */
 export interface KoiosConfig {
@@ -24,8 +24,8 @@ export interface KoiosConfig {
 export function getKoiosConfig(): KoiosConfig {
   const apiUrl = process.env.API_URL;
   const apiToken = process.env.API_TOKEN;
-  if (!apiUrl) throw new Error("API_URL is not set in the environment variables.");
-  if (!apiToken) throw new Error("API_TOKEN is not set in the environment variables.");
+  if (!apiUrl) throw new Error('API_URL is not set in the environment variables.');
+  if (!apiToken) throw new Error('API_TOKEN is not set in the environment variables.');
   return { apiUrl, apiToken, networkName: process.env.NETWORK_NAME };
 }
 
@@ -45,12 +45,12 @@ interface KoiosPoolInfo {
  * Cardano data provider backed by the Koios REST API.
  */
 export class KoiosProvider implements CardanoProvider {
-  readonly name = "Koios";
+  readonly name = 'Koios';
 
   constructor(private readonly config: KoiosConfig) {}
 
   async fetchTxInfo(txHash: string): Promise<TxInfo | null> {
-    const data = await this.post<TxInfo[]>("/tx_info", {
+    const data = await this.post<TxInfo[]>('/tx_info', {
       _tx_hashes: [txHash],
       _inputs: true,
       _metadata: false,
@@ -65,14 +65,14 @@ export class KoiosProvider implements CardanoProvider {
   }
 
   async fetchScript(scriptHash: string): Promise<Record<string, unknown> | false> {
-    const data = await this.post<Record<string, unknown>[]>("/script_info", {
+    const data = await this.post<Record<string, unknown>[]>('/script_info', {
       _script_hashes: [scriptHash],
     });
     return data.length > 0 ? data[0] : false;
   }
 
   async fetchPoolMetadata(poolBech32: string): Promise<PoolMetadata | null> {
-    const data = await this.post<KoiosPoolInfo[]>("/pool_info", {
+    const data = await this.post<KoiosPoolInfo[]>('/pool_info', {
       _pool_bech32_ids: [poolBech32],
     });
     if (data.length === 0) return null;
@@ -88,7 +88,7 @@ export class KoiosProvider implements CardanoProvider {
   }
 
   async fetchDrepInfo(drepIds: string[]): Promise<DrepInfo[]> {
-    return this.post<DrepInfo[]>("/drep_info", {
+    return this.post<DrepInfo[]>('/drep_info', {
       _drep_ids: drepIds,
     });
   }
@@ -105,7 +105,7 @@ export class KoiosProvider implements CardanoProvider {
       return result;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.error("Handle.me unavailable, falling back to Koios:", message);
+      console.error('Handle.me unavailable, falling back to Koios:', message);
     }
 
     // Fall back to Koios asset lookup
@@ -113,20 +113,20 @@ export class KoiosProvider implements CardanoProvider {
   }
 
   private async fetchHandleViaAssets(address: string): Promise<string | null> {
-    const handlePolicyId = "f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a";
+    const handlePolicyId = 'f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a';
     let endpoint: string | undefined;
     let body: Record<string, string[]> | undefined;
 
-    if (address.startsWith("stake")) {
-      endpoint = "account_assets";
+    if (address.startsWith('stake')) {
+      endpoint = 'account_assets';
       body = { _stake_addresses: [address] };
     }
-    if (address.startsWith("addr")) {
-      endpoint = "address_assets";
+    if (address.startsWith('addr')) {
+      endpoint = 'address_assets';
       body = { _addresses: [address] };
     }
     if (!endpoint || !body) {
-      console.error("Invalid address");
+      console.error('Invalid address');
       return null;
     }
 
@@ -135,11 +135,11 @@ export class KoiosProvider implements CardanoProvider {
       body,
     );
     if (data.length === 0) {
-      console.log("No handle found");
+      console.log('No handle found');
       return null;
     }
 
-    const metadata = await this.post<{ asset_name_ascii: string }[]>("/asset_info", {
+    const metadata = await this.post<{ asset_name_ascii: string }[]>('/asset_info', {
       _asset_list: [[data[0].policy_id, data[0].asset_name]],
     });
     return metadata[0].asset_name_ascii;
@@ -149,7 +149,7 @@ export class KoiosProvider implements CardanoProvider {
     try {
       const response = await fetch(`${this.config.apiUrl}${path}`, {
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           authorization: `Bearer ${this.config.apiToken}`,
         },
       });
@@ -165,9 +165,9 @@ export class KoiosProvider implements CardanoProvider {
   private async post<T>(path: string, body: unknown): Promise<T> {
     try {
       const response = await fetch(`${this.config.apiUrl}${path}`, {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
           authorization: `Bearer ${this.config.apiToken}`,
         },
         body: JSON.stringify(body),
@@ -192,7 +192,7 @@ export class KoiosProvider implements CardanoProvider {
  */
 export async function fetchHandleMe(address: string, networkName?: string): Promise<string | null> {
   const baseUrl =
-    networkName === "mainnet" ? "https://api.handle.me" : "https://preprod.api.handle.me";
+    networkName === 'mainnet' ? 'https://api.handle.me' : 'https://preprod.api.handle.me';
   const response = await fetch(`${baseUrl}/holders/${address}`);
   if (response.status === 200 || response.status === 202) {
     const data = (await response.json()) as { default_handle?: string };

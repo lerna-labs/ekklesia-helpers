@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 /**
  * Database connection manager for MongoDB using Mongoose.
@@ -15,18 +15,18 @@ const RECONNECT_INTERVAL = 5000;
 let isIntentionalDisconnect = false;
 
 function buildConnectionString(): string {
-  const host = process.env.MONGODB_HOST || "localhost";
-  const port = process.env.MONGODB_PORT || "27017";
+  const host = process.env.MONGODB_HOST || 'localhost';
+  const port = process.env.MONGODB_PORT || '27017';
   const database = process.env.MONGODB_DATABASE;
   const username = process.env.MONGODB_USERNAME;
   const password = process.env.MONGODB_PASSWORD;
-  const authSource = process.env.MONGODB_AUTH_SOURCE || "admin";
+  const authSource = process.env.MONGODB_AUTH_SOURCE || 'admin';
 
   if (!database) {
-    throw new Error("MONGODB_DATABASE environment variable is not defined");
+    throw new Error('MONGODB_DATABASE environment variable is not defined');
   }
 
-  let mongoUri = "mongodb://";
+  let mongoUri = 'mongodb://';
 
   if (username && password) {
     const encodedUsername = encodeURIComponent(username);
@@ -54,30 +54,30 @@ export async function connectToDatabase(
 ): Promise<mongoose.Connection | null> {
   try {
     if (connection && connection.readyState === 1) {
-      console.info("Using existing database connection");
+      console.info('Using existing database connection');
       return connection;
     }
 
     const mongoUri = buildConnectionString();
-    mongoose.set("strictQuery", true);
+    mongoose.set('strictQuery', true);
 
     if (isReconnectAttempt) {
       console.info(`Reconnection attempt ${reconnectAttempts} to MongoDB...`);
     } else {
-      console.info("Connecting to MongoDB...");
+      console.info('Connecting to MongoDB...');
       reconnectAttempts = 0;
     }
 
     await mongoose.connect(mongoUri);
     connection = mongoose.connection;
 
-    connection.on("error", (err: Error) => {
+    connection.on('error', (err: Error) => {
       console.error(`MongoDB connection error: ${err}`);
     });
 
-    connection.on("disconnected", () => {
+    connection.on('disconnected', () => {
       if (!isIntentionalDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-        console.warn("MongoDB disconnected");
+        console.warn('MongoDB disconnected');
         reconnectAttempts++;
         console.info(`Scheduling reconnection attempt in ${RECONNECT_INTERVAL / 1000} seconds...`);
         setTimeout(() => {
@@ -93,9 +93,9 @@ export async function connectToDatabase(
       }
     });
 
-    process.on("SIGINT", async () => {
+    process.on('SIGINT', async () => {
       if (connection) {
-        console.info("Closing MongoDB connection due to application termination");
+        console.info('Closing MongoDB connection due to application termination');
         await connection.close();
         process.exit(0);
       }
@@ -132,7 +132,7 @@ export async function disconnectFromDatabase(): Promise<void> {
     isIntentionalDisconnect = true;
     await mongoose.disconnect();
     connection = null;
-    console.info("Disconnected from MongoDB");
+    console.info('Disconnected from MongoDB');
     setTimeout(() => {
       isIntentionalDisconnect = false;
     }, 1000);
@@ -188,8 +188,8 @@ export const checkDatabaseConnectionMW = async (
   const isConnected = await checkDatabaseConnection();
   if (!isConnected) {
     res.status(503).json({
-      status: "error",
-      message: "Database connection is unavailable",
+      status: 'error',
+      message: 'Database connection is unavailable',
     });
     return;
   }
