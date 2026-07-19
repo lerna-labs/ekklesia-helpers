@@ -1,5 +1,5 @@
-import fs from "fs/promises";
-import { join } from "path";
+import fs from 'fs/promises';
+import { join } from 'path';
 
 /** Minimal Express-like application interface for route registration. */
 interface ExpressApp {
@@ -31,7 +31,7 @@ interface ExpressRouter {
 export async function loadRoutes(
   directory: string,
   app: ExpressApp,
-  baseRoute = "",
+  baseRoute = '',
 ): Promise<void> {
   try {
     const entries = await fs.readdir(directory, { withFileTypes: true });
@@ -40,16 +40,16 @@ export async function loadRoutes(
       const fullPath = join(directory, entry.name);
 
       if (entry.isDirectory()) {
-        const nextBaseRoute = join(baseRoute, entry.name).replace(/\\/g, "/");
+        const nextBaseRoute = join(baseRoute, entry.name).replace(/\\/g, '/');
         await loadRoutes(fullPath, app, nextBaseRoute);
-      } else if (entry.name.endsWith(".js") && entry.name !== "index.js") {
-        const routeName = entry.name.replace(".js", "");
-        const routePath = `/${baseRoute}/${routeName}`.replace(/\/+/g, "/");
+      } else if (entry.name.endsWith('.js') && entry.name !== 'index.js') {
+        const routeName = entry.name.replace('.js', '');
+        const routePath = `/${baseRoute}/${routeName}`.replace(/\/+/g, '/');
 
         const routeModule = (await import(`file://${fullPath}`)) as { default?: ExpressRouter };
         const router = routeModule.default;
 
-        if (router && typeof router.use === "function") {
+        if (router && typeof router.use === 'function') {
           console.log(`Route loaded: ${routePath}`);
           app.use(routePath, router);
         }

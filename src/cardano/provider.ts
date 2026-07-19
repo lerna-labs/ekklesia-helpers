@@ -7,7 +7,7 @@
  * @module cardano/provider
  */
 
-import type { CalidusKey, DrepInfo, TxInfo } from "./cardanoApi.js";
+import type { CalidusKey, DrepInfo, TxInfo } from './cardanoApi.js';
 
 /** Stake pool metadata. */
 export interface PoolMetadata {
@@ -29,7 +29,7 @@ export interface PoolMetadata {
 export class UnsupportedOperationError extends Error {
   constructor(provider: string, operation: string) {
     super(`${provider} does not support ${operation}`);
-    this.name = "UnsupportedOperationError";
+    this.name = 'UnsupportedOperationError';
   }
 }
 
@@ -41,7 +41,7 @@ export class ProviderError extends Error {
     public readonly cause?: unknown,
   ) {
     super(`[${provider}] ${message}`);
-    this.name = "ProviderError";
+    this.name = 'ProviderError';
   }
 }
 

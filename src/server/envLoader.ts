@@ -1,6 +1,6 @@
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * Loads environment variables from `.env.{NODE_ENV}` with fallback to `.env`.
@@ -16,10 +16,10 @@ import { fileURLToPath } from "url";
  * ```
  */
 export function loadEnvironmentVariables(rootDir?: string): void {
-  console.log("Loading environment variables...", rootDir);
+  console.log('Loading environment variables...', rootDir);
 
   if (!rootDir) {
-    const callerURL = new Error().stack?.split("\n")[2]?.match(/at\s+.+\s+\((.+):\d+:\d+\)/)?.[1];
+    const callerURL = new Error().stack?.split('\n')[2]?.match(/at\s+.+\s+\((.+):\d+:\d+\)/)?.[1];
 
     if (callerURL) {
       const callerPath = fileURLToPath(callerURL);
@@ -29,9 +29,9 @@ export function loadEnvironmentVariables(rootDir?: string): void {
     }
   }
 
-  const environment = process.env.NODE_ENV || "development";
+  const environment = process.env.NODE_ENV || 'development';
   const envPath = path.resolve(rootDir, `.env.${environment}`);
-  const defaultEnvPath = path.resolve(rootDir, ".env");
+  const defaultEnvPath = path.resolve(rootDir, '.env');
 
   try {
     const envConfig = dotenv.config({ path: envPath, quiet: true });
@@ -41,7 +41,7 @@ export function loadEnvironmentVariables(rootDir?: string): void {
       const defaultConfig = dotenv.config({ path: defaultEnvPath, quiet: true });
 
       if (defaultConfig.error) {
-        console.warn("No .env file found");
+        console.warn('No .env file found');
       } else {
         console.log(`Loaded environment variables from .env`);
       }

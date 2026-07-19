@@ -8,6 +8,6 @@ export {
   type CalidusAddressResult,
   type ValidateAddressResult,
   type AddressTypeInfo,
-} from "./address.js";
+} from './address.js';
 
-export { sanitizeInput } from "./sanitizeInput.js";
+export { sanitizeInput } from './sanitizeInput.js';

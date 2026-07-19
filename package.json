@@ -46,7 +46,11 @@
     "test:coverage": "vitest run --coverage",
     "test:live": "LIVE_TEST=true vitest run --reporter=verbose",
     "docs": "typedoc",
-    "docs:serve": "typedoc && npx serve docs"
+    "docs:serve": "typedoc && npx serve docs",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "npm run build && changeset publish",
+    "changeset:snapshot": "changeset version --snapshot rc"
   },
   "publishConfig": {
     "registry": "https://registry.npmjs.org",
@@ -67,6 +71,7 @@
     "mongoose": "^9.2.4"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "@eslint/js": "^9.39.3",
     "@types/jsonwebtoken": "^9.0.0",
     "@vitest/coverage-v8": "^3.0.0",
