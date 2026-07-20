@@ -98,21 +98,21 @@ export class KoiosProvider implements CardanoProvider {
     return data.length > 0 ? data[0] : null;
   }
 
-  async fetchHandle(address: string): Promise<string | null> {
-    // Try Handle.me first
+  async fetchHandles(address: string): Promise<string[]> {
+    // Handle.me is authoritative: it enumerates every handle in one request and
+    // reports which one the holder designated as their default.
     try {
-      const result = await fetchHandleMe(address, this.config.networkName);
-      return result;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error('Handle.me unavailable, falling back to Koios:', message);
+      const holder = await fetchHandleMe(address, this.config.networkName);
+      if (holder) return orderHolderHandles(holder);
+      return [];
+    } catch {
+      // Handle.me unavailable — fall back to the Koios asset lookup.
     }
 
-    // Fall back to Koios asset lookup
-    return this.fetchHandleViaAssets(address);
+    return this.fetchHandlesViaAssets(address);
   }
 
-  private async fetchHandleViaAssets(address: string): Promise<string | null> {
+  private async fetchHandlesViaAssets(address: string): Promise<string[]> {
     const handlePolicyId = 'f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a';
     let endpoint: string | undefined;
     let body: Record<string, string[]> | undefined;
@@ -126,23 +126,20 @@ export class KoiosProvider implements CardanoProvider {
       body = { _addresses: [address] };
     }
     if (!endpoint || !body) {
-      console.error('Invalid address');
-      return null;
+      throw new ProviderError(this.name, `Not a stake or payment address: ${address}`);
     }
 
     const data = await this.post<{ policy_id: string; asset_name: string }[]>(
       `/${endpoint}?policy_id=eq.${handlePolicyId}`,
       body,
     );
-    if (data.length === 0) {
-      console.log('No handle found');
-      return null;
-    }
+    if (data.length === 0) return [];
 
+    // Koios has no notion of a default handle, so ordering is ours to impose.
     const metadata = await this.post<{ asset_name_ascii: string }[]>('/asset_info', {
-      _asset_list: [[data[0].policy_id, data[0].asset_name]],
+      _asset_list: data.map((asset) => [asset.policy_id, asset.asset_name]),
     });
-    return metadata[0].asset_name_ascii;
+    return sortHandles(metadata.map((m) => m.asset_name_ascii).filter(Boolean));
   }
 
   private async get<T>(path: string): Promise<T> {
@@ -182,24 +179,74 @@ export class KoiosProvider implements CardanoProvider {
   }
 }
 
+/** A holder's handles as reported by Handle.me. */
+export interface HandleMeHolder {
+  /** Every handle held by the address. */
+  handles: string[];
+  /** The holder's designated default handle, if they have one. */
+  defaultHandle: string | null;
+}
+
 /**
- * Fetch handle from Handle.me API.
+ * Orders handles so the result of a lookup is stable across calls.
+ *
+ * Koios returns handle assets in no particular order, so an address holding
+ * several handles would otherwise resolve to a different name run to run.
+ * Shortest-first matches the community reading of a short handle as the more
+ * significant one, with a lexicographic tiebreak to make it total.
+ *
+ * @param handles - Handle names in arbitrary order.
+ * @returns A new array sorted by length, then lexicographically.
+ */
+export function sortHandles(handles: string[]): string[] {
+  return [...handles].sort((a, b) => a.length - b.length || a.localeCompare(b));
+}
+
+/**
+ * Fetch every handle held by an address from the Handle.me API.
  *
  * @param address - Cardano address (stake or payment).
  * @param networkName - Network name for URL selection.
- * @returns Handle name or null.
+ * @returns The holder's handles and their designated default, or `null` if the
+ *   address holds none.
  * @throws On unexpected HTTP status.
  */
-export async function fetchHandleMe(address: string, networkName?: string): Promise<string | null> {
+export async function fetchHandleMe(
+  address: string,
+  networkName?: string,
+): Promise<HandleMeHolder | null> {
   const baseUrl =
     networkName === 'mainnet' ? 'https://api.handle.me' : 'https://preprod.api.handle.me';
   const response = await fetch(`${baseUrl}/holders/${address}`);
   if (response.status === 200 || response.status === 202) {
-    const data = (await response.json()) as { default_handle?: string };
-    return data.default_handle || null;
+    const data = (await response.json()) as { handles?: string[]; default_handle?: string };
+    const handles = Array.isArray(data.handles) ? data.handles.filter(Boolean) : [];
+    const defaultHandle = data.default_handle || null;
+    // Older responses (and any we can't parse) may carry only default_handle.
+    if (handles.length === 0) {
+      return defaultHandle ? { handles: [defaultHandle], defaultHandle } : null;
+    }
+    return { handles, defaultHandle };
   }
   if (response.status === 404) {
     return null;
   }
   throw new Error(`Handle.me returned unexpected status ${response.status}`);
+}
+
+/**
+ * Orders a holder's handles with their designated default first.
+ *
+ * The default handle is the holder's own statement of which name represents
+ * them, so it outranks any rule we could impose; everything else falls back to
+ * {@link sortHandles}.
+ *
+ * @param holder - A Handle.me holder record.
+ * @returns All handles, default first.
+ */
+export function orderHolderHandles(holder: HandleMeHolder): string[] {
+  const rest = sortHandles(holder.handles.filter((h) => h !== holder.defaultHandle));
+  return holder.defaultHandle && holder.handles.includes(holder.defaultHandle)
+    ? [holder.defaultHandle, ...rest]
+    : rest;
 }

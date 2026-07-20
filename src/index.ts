@@ -38,6 +38,7 @@ export {
   fetchDrepName,
   validateDrep,
   fetchHandle,
+  fetchHandles,
   fetchTxInfo,
   fetchPoolTicker,
   fetchPoolMetadata,
