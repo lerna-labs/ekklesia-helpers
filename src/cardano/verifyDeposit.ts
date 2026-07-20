@@ -30,7 +30,12 @@ export interface DepositError {
  * @param txHash - Transaction hash (hex).
  * @param stakeAddr - Stake address to verify as contributor (bech32).
  * @param options - Deposit or treasury donation requirements.
- * @returns `true` if all checks pass, or an object with an `error` message.
+ * @returns `true` if all checks pass, or an object with an `error` message
+ *   describing which requirement the transaction failed.
+ * @throws {@link ProviderError} if the chain data cannot be fetched. A returned
+ *   `error` therefore always means the transaction genuinely failed a check,
+ *   never that we were unable to look it up — an outage must not read as a
+ *   rejected deposit.
  *
  * @example
  * ```ts

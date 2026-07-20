@@ -106,6 +106,40 @@ await fetchIdentity('pool1qqqqqdk4zh...');
 | `fetchIdentity`     | Returns rich identity metadata (displayName, type, description...) |
 | `verifyDeposit`     | Verifies transaction deposits and treasury donations on-chain      |
 
+#### Errors vs. absence
+
+These helpers distinguish "the chain says no" from "we could not ask". A
+`null` / `false` / `[]` result always means the provider answered and the thing
+genuinely does not exist. If the provider is unreachable, misconfigured, or
+rejects the request — an expired `API_TOKEN`, for instance — the call throws a
+`ProviderError` naming the provider that failed, after the configured fallback
+provider has also been tried.
+
+This matters most for `verifyDeposit`: an outage must never read as a rejected
+deposit.
+
+```ts
+import { fetchTxInfo, ProviderError } from '@lerna-labs/ekklesia-helpers/cardano';
+
+try {
+  const tx = await fetchTxInfo(txHash);
+  if (tx === null) {
+    // No such transaction on chain.
+  }
+} catch (error) {
+  if (error instanceof ProviderError) {
+    // Could not reach the chain — retry, alert, or degrade. Do not treat
+    // this as "transaction does not exist".
+  }
+  throw error;
+}
+```
+
+Off-chain metadata is deliberately exempt. `fetchDrepName` and
+`fetchPoolMetadata` fetch operator-controlled URLs that are expected to be
+flaky, so an unreachable or malformed metadata document yields `undefined` /
+partial metadata rather than throwing.
+
 ### Server (`@lerna-labs/ekklesia-helpers/server`)
 
 | Export                      | Description                                               |
