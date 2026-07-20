@@ -284,6 +284,61 @@ describe('cardanoApi', () => {
       await expect(fetchIdentity('pool1abc')).rejects.toThrow(ProviderError);
     });
 
+    // Bodies below are the real Koios responses, captured with an expired,
+    // an invalid and a malformed token. All three are 403 with a plain text
+    // body, so the status alone cannot tell them apart.
+    it('surfaces the Koios explanation for an expired subscription', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () =>
+          'Subscription expired, Please renew your token from https://koios.rest/Profile.html',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/Subscription expired/);
+    });
+
+    it('distinguishes an invalid token from an expired one', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () =>
+          'Unauthorized Auth Token, Please verify your token created from https://koios.rest/Profile.html',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/Unauthorized Auth Token/);
+    });
+
+    it('includes the status code alongside the explanation', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired, Please renew your token',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/HTTP 403/);
+    });
+
+    it('still reports the status when the body cannot be read', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 503,
+        text: async () => {
+          throw new Error('stream closed');
+        },
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/HTTP 503/);
+    });
+
+    it('truncates a runaway error body rather than flooding the log', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'x'.repeat(5000),
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/\.\.\.$/);
+      await fetchTxInfo('abc123').catch((e) => {
+        expect(e.message.length).toBeLessThan(400);
+      });
+    });
+
     it('does not throw when the provider answers that nothing was found', async () => {
       mockFetch.mockResolvedValueOnce({ json: async () => [] });
       expect(await fetchTxInfo('abc123')).toBeNull();

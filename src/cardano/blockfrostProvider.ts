@@ -9,7 +9,7 @@ import { Address, BaseAddress, RewardAddress } from '@emurgo/cardano-serializati
 import type { CardanoProvider } from './provider.js';
 import { ProviderError, UnsupportedOperationError, type PoolMetadata } from './provider.js';
 import type { CalidusKey, DrepInfo, TxIO, TxInfo } from './cardanoApi.js';
-import { fetchHandleMe, orderHolderHandles } from './koiosProvider.js';
+import { describeHttpFailure, fetchHandleMe, orderHolderHandles } from './koiosProvider.js';
 
 /** Configuration for the Blockfrost provider. */
 export interface BlockfrostConfig {
@@ -222,7 +222,10 @@ export class BlockfrostProvider implements CardanoProvider {
       });
       if (response.status === 404) return null;
       if (!response.ok) {
-        throw new ProviderError(this.name, `GET ${path} returned ${response.status}`);
+        throw new ProviderError(
+          this.name,
+          `GET ${path} failed: ${await describeHttpFailure(response)}`,
+        );
       }
       return (await response.json()) as T;
     } catch (error) {
