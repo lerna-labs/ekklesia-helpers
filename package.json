@@ -77,11 +77,11 @@
     "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9.39.5",
     "eslint-config-prettier": "^10.1.8",
-    "jiti": "^2.6.1",
-    "prettier": "^3.0.0",
-    "typedoc": "^0.28.18",
+    "jiti": "^2.7.0",
+    "prettier": "^3.9.5",
+    "typedoc": "^0.28.20",
     "typescript": "^5.7.0",
-    "typescript-eslint": "^8.63.0",
+    "typescript-eslint": "^8.64.0",
     "vitest": "^4.1.10"
   }
 }
