@@ -55,6 +55,8 @@ export {
   type PoolMetadata,
   UnsupportedOperationError,
   ProviderError,
+  ProviderAuthError,
+  ProviderRateLimitError,
   verifyDeposit,
   type DepositOptions,
   type DepositError,

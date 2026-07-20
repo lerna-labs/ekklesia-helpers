@@ -14,7 +14,7 @@ import {
   fetchIdentity,
   resetProviders,
 } from './cardanoApi.js';
-import { ProviderError } from './provider.js';
+import { ProviderError, ProviderAuthError, ProviderRateLimitError } from './provider.js';
 
 // Valid script hash for format validation (28 bytes = 56 hex chars)
 const validScriptHash = '2ac096b860eb407ffb4a8955ef15c3774be4c632f6d3310925f2026f';
@@ -337,6 +337,83 @@ describe('cardanoApi', () => {
       await fetchTxInfo('abc123').catch((e) => {
         expect(e.message.length).toBeLessThan(400);
       });
+    });
+
+    it('raises ProviderAuthError for an expired subscription', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired, Please renew your token',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderAuthError);
+    });
+
+    it('raises ProviderAuthError for 401 as well as 403', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 401, text: async () => 'Unauthorized' });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderAuthError);
+    });
+
+    it('keeps auth errors catchable as ProviderError for existing callers', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired',
+      });
+      // Consumers written against the 2.0.0 contract catch the base class.
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
+    });
+
+    it('raises ProviderRateLimitError when throttled', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: () => null },
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderRateLimitError);
+    });
+
+    it('treats an exhausted quota as rate limiting, not bad credentials', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 402,
+        text: async () => 'Daily request limit exceeded',
+        headers: { get: () => null },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error).toBeInstanceOf(ProviderRateLimitError);
+      expect(error).not.toBeInstanceOf(ProviderAuthError);
+    });
+
+    it('exposes Retry-After so callers can honour the provider backoff', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: (h: string) => (h === 'retry-after' ? '30' : null) },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error.retryAfterSeconds).toBe(30);
+    });
+
+    it('leaves retryAfterSeconds undefined when the header is absent or junk', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: () => 'not-a-number' },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error.retryAfterSeconds).toBeUndefined();
+    });
+
+    it('leaves a server error as a plain transient ProviderError', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 503, text: async () => 'Bad gateway' });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error).toBeInstanceOf(ProviderError);
+      expect(error).not.toBeInstanceOf(ProviderAuthError);
+      expect(error).not.toBeInstanceOf(ProviderRateLimitError);
+      expect(error.status).toBe(503);
     });
 
     it('does not throw when the provider answers that nothing was found', async () => {

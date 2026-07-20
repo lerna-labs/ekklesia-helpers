@@ -5,7 +5,7 @@
  */
 
 import type { CardanoProvider } from './provider.js';
-import { ProviderError, type PoolMetadata } from './provider.js';
+import { ProviderError, errorFromResponse, type PoolMetadata } from './provider.js';
 import type { CalidusKey, DrepInfo, TxInfo } from './cardanoApi.js';
 
 /** Configuration for the Koios provider. */
@@ -27,41 +27,6 @@ export function getKoiosConfig(): KoiosConfig {
   if (!apiUrl) throw new Error('API_URL is not set in the environment variables.');
   if (!apiToken) throw new Error('API_TOKEN is not set in the environment variables.');
   return { apiUrl, apiToken, networkName: process.env.NETWORK_NAME };
-}
-
-/**
- * Upper bound on how much of an error response body is folded into a
- * {@link ProviderError} message. Koios explains auth failures in a short plain
- * text line; this is generous enough for those while keeping a stray HTML error
- * page from flooding the logs.
- */
-const ERROR_BODY_MAX_CHARS = 200;
-
-/**
- * Reads a failed response's body for use in an error message.
- *
- * Koios answers auth failures with `403` and a plain text explanation that says
- * exactly what is wrong, distinguishing an expired subscription from a
- * malformed or unrecognised token. Surfacing it turns "POST /tx_info failed"
- * into something an operator can act on without reproducing the request.
- *
- * Never throws: a body that cannot be read is simply omitted.
- *
- * @param response - The non-2xx response.
- * @returns A single-line summary such as `HTTP 403 Subscription expired...`.
- */
-export async function describeHttpFailure(response: Response): Promise<string> {
-  let detail = '';
-  try {
-    const body = (await response.text()).trim().replace(/\s+/g, ' ');
-    if (body) {
-      detail =
-        body.length > ERROR_BODY_MAX_CHARS ? `${body.slice(0, ERROR_BODY_MAX_CHARS)}...` : body;
-    }
-  } catch {
-    /* body unreadable; the status alone still beats nothing */
-  }
-  return detail ? `HTTP ${response.status} ${detail}` : `HTTP ${response.status}`;
 }
 
 /** Koios pool info response shape (relevant fields only). */
@@ -186,10 +151,7 @@ export class KoiosProvider implements CardanoProvider {
         },
       });
       if (response.ok === false) {
-        throw new ProviderError(
-          this.name,
-          `GET ${path} failed: ${await describeHttpFailure(response)}`,
-        );
+        throw await errorFromResponse(this.name, `GET ${path}`, response);
       }
       return (await response.json()) as T;
     } catch (error) {
@@ -210,10 +172,7 @@ export class KoiosProvider implements CardanoProvider {
         body: JSON.stringify(body),
       });
       if (response.ok === false) {
-        throw new ProviderError(
-          this.name,
-          `POST ${path} failed: ${await describeHttpFailure(response)}`,
-        );
+        throw await errorFromResponse(this.name, `POST ${path}`, response);
       }
       return (await response.json()) as T;
     } catch (error) {
