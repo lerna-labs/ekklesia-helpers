@@ -135,6 +135,50 @@ try {
 }
 ```
 
+#### Telling failures apart
+
+Not every failure wants the same response, so `ProviderError` has two subclasses.
+Both extend it, so the block above keeps catching everything; narrow further only
+where it changes what you do.
+
+| error                    | meaning                                  | what to do                                                  |
+| ------------------------ | ---------------------------------------- | ----------------------------------------------------------- |
+| `ProviderAuthError`      | credentials rejected (401, 403, 418)     | retrying will not help — surface it and get the key renewed |
+| `ProviderRateLimitError` | throttled or quota exhausted (402, 429)  | wait, then retry; honour `retryAfterSeconds` when set       |
+| `ProviderError`          | transient: network failure, timeout, 5xx | retry                                                       |
+
+```ts
+import {
+  fetchTxInfo,
+  ProviderError,
+  ProviderAuthError,
+  ProviderRateLimitError,
+} from '@lerna-labs/ekklesia-helpers/cardano';
+
+try {
+  const tx = await fetchTxInfo(txHash);
+} catch (error) {
+  if (error instanceof ProviderAuthError) {
+    // e.g. "[Koios] POST /tx_info failed: HTTP 403 Subscription expired,
+    // Please renew your token from https://koios.rest/Profile.html"
+    alertOnCall(error.message);
+  } else if (error instanceof ProviderRateLimitError) {
+    await sleep((error.retryAfterSeconds ?? 60) * 1000);
+  } else if (error instanceof ProviderError) {
+    scheduleRetry();
+  }
+  throw error;
+}
+```
+
+Every `ProviderError` carries `provider`, `status` (when the failure came from a
+response), and the upstream explanation in its message. Providers frequently
+return the same status for different causes — Koios answers `403` for an expired
+subscription, an unrecognised token, and a malformed one alike — so the message
+body is what tells them apart.
+
+The fallback provider is always tried before any of these is raised.
+
 Off-chain metadata is deliberately exempt. `fetchDrepName` and
 `fetchPoolMetadata` fetch operator-controlled URLs that are expected to be
 flaky, so an unreachable or malformed metadata document yields `undefined` /

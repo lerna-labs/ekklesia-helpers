@@ -33,16 +33,142 @@ export class UnsupportedOperationError extends Error {
   }
 }
 
-/** Thrown when a provider encounters a network or server error. */
+/**
+ * Thrown when a provider encounters a network or server error.
+ *
+ * This is the transient case: a timeout, a connection failure, or a 5xx. The
+ * request is worth retrying as-is. The two subclasses below carve out the
+ * failures where retrying alone will not help, so callers can tell "try again"
+ * from "someone needs to do something".
+ */
 export class ProviderError extends Error {
   constructor(
     public readonly provider: string,
     message: string,
     public readonly cause?: unknown,
+    /** HTTP status that caused this, when the failure came from a response. */
+    public readonly status?: number,
   ) {
     super(`[${provider}] ${message}`);
     this.name = 'ProviderError';
   }
+}
+
+/**
+ * Thrown when the provider rejected our credentials.
+ *
+ * Covers an expired subscription, an unrecognised or malformed token, and a
+ * banned client. Retrying is pointless until an operator rotates or renews the
+ * key, so callers should surface this rather than fold it into generic backoff.
+ *
+ * Extends {@link ProviderError}, so existing `instanceof ProviderError` checks
+ * continue to catch it.
+ */
+export class ProviderAuthError extends ProviderError {
+  constructor(provider: string, message: string, status?: number, cause?: unknown) {
+    super(provider, message, cause, status);
+    this.name = 'ProviderAuthError';
+  }
+}
+
+/**
+ * Thrown when the provider is throttling us or the plan's quota is exhausted.
+ *
+ * Retrying helps, but only after waiting. Where the provider sent a
+ * `Retry-After` header its value is exposed as {@link retryAfterSeconds} so
+ * callers can honour it instead of guessing a backoff.
+ *
+ * Extends {@link ProviderError}, so existing `instanceof ProviderError` checks
+ * continue to catch it.
+ */
+export class ProviderRateLimitError extends ProviderError {
+  constructor(
+    provider: string,
+    message: string,
+    status?: number,
+    /** Seconds to wait, from the `Retry-After` header, when the provider sent one. */
+    public readonly retryAfterSeconds?: number,
+    cause?: unknown,
+  ) {
+    super(provider, message, cause, status);
+    this.name = 'ProviderRateLimitError';
+  }
+}
+
+/**
+ * Upper bound on how much of an error response body is folded into a message.
+ *
+ * Providers explain auth failures in a short plain text line; this is generous
+ * enough for those while keeping a stray HTML error page out of the logs.
+ */
+const ERROR_BODY_MAX_CHARS = 200;
+
+/**
+ * Statuses that mean our credentials were rejected.
+ *
+ * `401` and `403` are the usual pair. Blockfrost also uses `418` for a banned
+ * client, which likewise needs an operator rather than a retry.
+ */
+const AUTH_STATUSES = new Set([401, 403, 418]);
+
+/**
+ * Statuses that mean we are being throttled.
+ *
+ * `429` is standard. Blockfrost uses `402` for a project that has exhausted its
+ * daily request allowance, which is the same "wait, then retry" shape rather
+ * than a credential problem.
+ */
+const RATE_LIMIT_STATUSES = new Set([402, 429]);
+
+/**
+ * Builds the right {@link ProviderError} subclass for a failed HTTP response.
+ *
+ * Reads a bounded slice of the body into the message. Providers say precisely
+ * what went wrong there and the status alone often cannot distinguish the
+ * cases: Koios answers `403` for an expired subscription, an unrecognised
+ * token, and a malformed one alike, and only the body tells them apart.
+ *
+ * Never throws; a body that cannot be read is simply omitted.
+ *
+ * @param provider - Name of the provider that failed.
+ * @param context - What was being attempted, e.g. `POST /tx_info`.
+ * @param response - The non-2xx response.
+ * @returns A {@link ProviderAuthError}, {@link ProviderRateLimitError}, or
+ *   plain {@link ProviderError} depending on the status.
+ */
+export async function errorFromResponse(
+  provider: string,
+  context: string,
+  response: Response,
+): Promise<ProviderError> {
+  let detail = '';
+  try {
+    const body = (await response.text()).trim().replace(/\s+/g, ' ');
+    if (body) {
+      detail =
+        body.length > ERROR_BODY_MAX_CHARS ? `${body.slice(0, ERROR_BODY_MAX_CHARS)}...` : body;
+    }
+  } catch {
+    /* body unreadable; the status alone still beats nothing */
+  }
+
+  const status = response.status;
+  const message = `${context} failed: HTTP ${status}${detail ? ` ${detail}` : ''}`;
+
+  if (AUTH_STATUSES.has(status)) {
+    return new ProviderAuthError(provider, message, status);
+  }
+  if (RATE_LIMIT_STATUSES.has(status)) {
+    const header = response.headers?.get?.('retry-after');
+    const parsed = header ? Number(header) : NaN;
+    return new ProviderRateLimitError(
+      provider,
+      message,
+      status,
+      Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined,
+    );
+  }
+  return new ProviderError(provider, message, undefined, status);
 }
 
 /**

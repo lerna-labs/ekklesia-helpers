@@ -24,6 +24,8 @@ export {
   type PoolMetadata,
   UnsupportedOperationError,
   ProviderError,
+  ProviderAuthError,
+  ProviderRateLimitError,
 } from './provider.js';
 
 export { verifyDeposit, type DepositOptions, type DepositError } from './verifyDeposit.js';

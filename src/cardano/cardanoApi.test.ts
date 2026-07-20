@@ -14,7 +14,7 @@ import {
   fetchIdentity,
   resetProviders,
 } from './cardanoApi.js';
-import { ProviderError } from './provider.js';
+import { ProviderError, ProviderAuthError, ProviderRateLimitError } from './provider.js';
 
 // Valid script hash for format validation (28 bytes = 56 hex chars)
 const validScriptHash = '2ac096b860eb407ffb4a8955ef15c3774be4c632f6d3310925f2026f';
@@ -282,6 +282,138 @@ describe('cardanoApi', () => {
     it('propagates through fetchIdentity rather than resolving to null', async () => {
       mockFetch.mockResolvedValue(expiredToken);
       await expect(fetchIdentity('pool1abc')).rejects.toThrow(ProviderError);
+    });
+
+    // Bodies below are the real Koios responses, captured with an expired,
+    // an invalid and a malformed token. All three are 403 with a plain text
+    // body, so the status alone cannot tell them apart.
+    it('surfaces the Koios explanation for an expired subscription', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () =>
+          'Subscription expired, Please renew your token from https://koios.rest/Profile.html',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/Subscription expired/);
+    });
+
+    it('distinguishes an invalid token from an expired one', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () =>
+          'Unauthorized Auth Token, Please verify your token created from https://koios.rest/Profile.html',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/Unauthorized Auth Token/);
+    });
+
+    it('includes the status code alongside the explanation', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired, Please renew your token',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/HTTP 403/);
+    });
+
+    it('still reports the status when the body cannot be read', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 503,
+        text: async () => {
+          throw new Error('stream closed');
+        },
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/HTTP 503/);
+    });
+
+    it('truncates a runaway error body rather than flooding the log', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'x'.repeat(5000),
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/\.\.\.$/);
+      await fetchTxInfo('abc123').catch((e) => {
+        expect(e.message.length).toBeLessThan(400);
+      });
+    });
+
+    it('raises ProviderAuthError for an expired subscription', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired, Please renew your token',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderAuthError);
+    });
+
+    it('raises ProviderAuthError for 401 as well as 403', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 401, text: async () => 'Unauthorized' });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderAuthError);
+    });
+
+    it('keeps auth errors catchable as ProviderError for existing callers', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired',
+      });
+      // Consumers written against the 2.0.0 contract catch the base class.
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
+    });
+
+    it('raises ProviderRateLimitError when throttled', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: () => null },
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderRateLimitError);
+    });
+
+    it('treats an exhausted quota as rate limiting, not bad credentials', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 402,
+        text: async () => 'Daily request limit exceeded',
+        headers: { get: () => null },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error).toBeInstanceOf(ProviderRateLimitError);
+      expect(error).not.toBeInstanceOf(ProviderAuthError);
+    });
+
+    it('exposes Retry-After so callers can honour the provider backoff', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: (h: string) => (h === 'retry-after' ? '30' : null) },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error.retryAfterSeconds).toBe(30);
+    });
+
+    it('leaves retryAfterSeconds undefined when the header is absent or junk', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: () => 'not-a-number' },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error.retryAfterSeconds).toBeUndefined();
+    });
+
+    it('leaves a server error as a plain transient ProviderError', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 503, text: async () => 'Bad gateway' });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error).toBeInstanceOf(ProviderError);
+      expect(error).not.toBeInstanceOf(ProviderAuthError);
+      expect(error).not.toBeInstanceOf(ProviderRateLimitError);
+      expect(error.status).toBe(503);
     });
 
     it('does not throw when the provider answers that nothing was found', async () => {

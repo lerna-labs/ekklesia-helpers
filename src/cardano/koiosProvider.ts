@@ -5,7 +5,7 @@
  */
 
 import type { CardanoProvider } from './provider.js';
-import { ProviderError, type PoolMetadata } from './provider.js';
+import { ProviderError, errorFromResponse, type PoolMetadata } from './provider.js';
 import type { CalidusKey, DrepInfo, TxInfo } from './cardanoApi.js';
 
 /** Configuration for the Koios provider. */
@@ -151,10 +151,12 @@ export class KoiosProvider implements CardanoProvider {
         },
       });
       if (response.ok === false) {
-        throw new Error(`HTTP ${response.status}`);
+        throw await errorFromResponse(this.name, `GET ${path}`, response);
       }
       return (await response.json()) as T;
     } catch (error) {
+      // Already descriptive; re-wrapping would bury the upstream explanation.
+      if (error instanceof ProviderError) throw error;
       throw new ProviderError(this.name, `GET ${path} failed`, error);
     }
   }
@@ -170,10 +172,12 @@ export class KoiosProvider implements CardanoProvider {
         body: JSON.stringify(body),
       });
       if (response.ok === false) {
-        throw new Error(`HTTP ${response.status}`);
+        throw await errorFromResponse(this.name, `POST ${path}`, response);
       }
       return (await response.json()) as T;
     } catch (error) {
+      // Already descriptive; re-wrapping would bury the upstream explanation.
+      if (error instanceof ProviderError) throw error;
       throw new ProviderError(this.name, `POST ${path} failed`, error);
     }
   }

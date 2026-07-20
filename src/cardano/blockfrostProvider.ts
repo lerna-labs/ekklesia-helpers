@@ -7,7 +7,12 @@
 import { Address, BaseAddress, RewardAddress } from '@emurgo/cardano-serialization-lib-nodejs';
 
 import type { CardanoProvider } from './provider.js';
-import { ProviderError, UnsupportedOperationError, type PoolMetadata } from './provider.js';
+import {
+  ProviderError,
+  UnsupportedOperationError,
+  errorFromResponse,
+  type PoolMetadata,
+} from './provider.js';
 import type { CalidusKey, DrepInfo, TxIO, TxInfo } from './cardanoApi.js';
 import { fetchHandleMe, orderHolderHandles } from './koiosProvider.js';
 
@@ -222,7 +227,7 @@ export class BlockfrostProvider implements CardanoProvider {
       });
       if (response.status === 404) return null;
       if (!response.ok) {
-        throw new ProviderError(this.name, `GET ${path} returned ${response.status}`);
+        throw await errorFromResponse(this.name, `GET ${path}`, response);
       }
       return (await response.json()) as T;
     } catch (error) {
