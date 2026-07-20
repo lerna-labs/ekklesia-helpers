@@ -19,6 +19,15 @@ The secondary-provider fallback is unchanged and still runs first.
 This matters most for `verifyDeposit`, which previously turned an outage into
 `{ error: 'Transaction not found' }` — rejecting a legitimate deposit.
 
+The `/crypto` signature helpers (`verifySignature`, `isPartyToScript`,
+`validateScriptSignatures`) propagate too, since they resolve scripts and
+Calidus keys through these lookups. Their `SignatureError` returns are
+correspondingly more trustworthy: `'Script not found'` now means the script is
+genuinely unpublished rather than "we could not check". Note that a
+`SignatureError` is truthy, so callers gating on completeness with `if (!result)`
+were already falling through on that error and should be tightened to
+`if (result !== true)`.
+
 Off-chain metadata is exempt: `fetchDrepName` and `fetchPoolMetadata` fetch
 operator-controlled URLs that are expected to be flaky, so an unreachable or
 malformed metadata document still yields `undefined` / partial metadata.
