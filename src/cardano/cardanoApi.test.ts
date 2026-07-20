@@ -14,6 +14,7 @@ import {
   fetchIdentity,
   resetProviders,
 } from './cardanoApi.js';
+import { ProviderError } from './provider.js';
 
 // Valid script hash for format validation (28 bytes = 56 hex chars)
 const validScriptHash = '2ac096b860eb407ffb4a8955ef15c3774be4c632f6d3310925f2026f';
@@ -70,10 +71,9 @@ describe('cardanoApi', () => {
       await expect(getScript('invalidhash')).rejects.toThrow('Not a valid script hash');
     });
 
-    it('returns false on fetch error', async () => {
+    it('throws rather than reporting a missing script when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const result = await getScript(validScriptHash);
-      expect(result).toBe(false);
+      await expect(getScript(validScriptHash)).rejects.toThrow(ProviderError);
     });
   });
 
@@ -105,10 +105,9 @@ describe('cardanoApi', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null on fetch error', async () => {
+    it('throws rather than reporting no key when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const result = await fetchCalidusKey('pool1abc');
-      expect(result).toBeNull();
+      await expect(fetchCalidusKey('pool1abc')).rejects.toThrow(ProviderError);
     });
   });
 
@@ -221,9 +220,16 @@ describe('cardanoApi', () => {
       expect(await fetchDrepName('drep1abc')).toBeUndefined();
     });
 
-    it('returns null on primary fetch error', async () => {
+    it('throws rather than reporting an unknown DRep when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      expect(await fetchDrepName('drep1abc')).toBeNull();
+      await expect(fetchDrepName('drep1abc')).rejects.toThrow(ProviderError);
+    });
+
+    it('still returns undefined when only the off-chain metadata is unreachable', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo('https://meta.example.com/drep.json'))
+        .mockRejectedValueOnce(new Error('Network error'));
+      expect(await fetchDrepName('drep1abc')).toBeUndefined();
     });
   });
 
@@ -242,9 +248,58 @@ describe('cardanoApi', () => {
       expect(await validateDrep('drep1nonexistent')).toBe(false);
     });
 
-    it('returns false on error', async () => {
+    it('throws rather than reporting the DRep unregistered when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      expect(await validateDrep('drep1abc')).toBe(false);
+      await expect(validateDrep('drep1abc')).rejects.toThrow(ProviderError);
+    });
+  });
+
+  describe('provider availability (issue #9)', () => {
+    // The reported symptom: an expired API token made every lookup answer
+    // "not found", so callers could not tell an outage from a real absence.
+    const expiredToken = { ok: false, status: 401 };
+
+    it('surfaces an expired token instead of reporting the tx missing', async () => {
+      mockFetch.mockResolvedValueOnce(expiredToken);
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
+    });
+
+    it('surfaces an expired token instead of reporting the DRep unregistered', async () => {
+      mockFetch.mockResolvedValueOnce(expiredToken);
+      await expect(validateDrep('drep1abc')).rejects.toThrow(ProviderError);
+    });
+
+    it('names the failing provider in the error', async () => {
+      mockFetch.mockResolvedValueOnce(expiredToken);
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/koios/i);
+    });
+
+    it('propagates through fetchName rather than resolving to null', async () => {
+      mockFetch.mockResolvedValue(expiredToken);
+      await expect(fetchName('pool1abc')).rejects.toThrow(ProviderError);
+    });
+
+    it('propagates through fetchIdentity rather than resolving to null', async () => {
+      mockFetch.mockResolvedValue(expiredToken);
+      await expect(fetchIdentity('pool1abc')).rejects.toThrow(ProviderError);
+    });
+
+    it('does not throw when the provider answers that nothing was found', async () => {
+      mockFetch.mockResolvedValueOnce({ json: async () => [] });
+      expect(await fetchTxInfo('abc123')).toBeNull();
+    });
+
+    it('still tries the secondary provider before giving up', async () => {
+      process.env.BLOCKFROST_URL = 'https://blockfrost.example';
+      process.env.BLOCKFROST_PROJECT_ID = 'test-project';
+      resetProviders();
+      mockFetch.mockResolvedValue(expiredToken);
+      // Both providers are down, so this still rejects — but only after the
+      // secondary was actually consulted.
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
+      const hosts = mockFetch.mock.calls.map((c) => String(c[0]));
+      expect(hosts.some((u) => u.includes('koios'))).toBe(true);
+      expect(hosts.some((u) => u.includes('blockfrost'))).toBe(true);
     });
   });
 
@@ -398,10 +453,9 @@ describe('cardanoApi', () => {
       expect(mockFetch.mock.calls[1][0]).toContain('address_assets');
     });
 
-    it('returns null for invalid address prefix via Koios fallback', async () => {
+    it('throws for an invalid address prefix via the Koios fallback', async () => {
       mockFetch.mockResolvedValueOnce({ status: 500 }); // Handle.me fails
-      const result = await fetchHandle('invalid_prefix');
-      expect(result).toBeNull();
+      await expect(fetchHandle('invalid_prefix')).rejects.toThrow(ProviderError);
     });
 
     it('uses preprod Handle.me API when NETWORK_NAME is not mainnet', async () => {
@@ -453,10 +507,9 @@ describe('cardanoApi', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null on fetch error', async () => {
+    it('throws rather than reporting a missing tx when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const result = await fetchTxInfo('abc123');
-      expect(result).toBeNull();
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
     });
   });
 
@@ -495,10 +548,9 @@ describe('cardanoApi', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null on fetch error', async () => {
+    it('throws rather than reporting no ticker when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const result = await fetchPoolTicker('pool1abc');
-      expect(result).toBeNull();
+      await expect(fetchPoolTicker('pool1abc')).rejects.toThrow(ProviderError);
     });
   });
 

@@ -137,7 +137,8 @@ export function resetProviders(): void {
  * Fetches script information for a given script hash.
  *
  * @param scriptHash - The hexadecimal script hash to look up.
- * @returns The script data object if found, `false` otherwise.
+ * @returns The script data object if found, `false` if no such script exists.
+ * @throws {@link ProviderError} if the provider is unreachable or errors.
  *
  * @example
  * ```ts
@@ -151,27 +152,19 @@ export async function getScript(scriptHash: string): Promise<Record<string, unkn
   try {
     ScriptHash.from_hex(scriptHash);
   } catch (_error) {
-    console.error(`Not a valid script hash: ${scriptHash}`);
     throw new Error('Not a valid script hash');
   }
 
   const { primary, secondary } = getProviders();
-
-  try {
-    return await withFallback(primary, secondary, (p) => p.fetchScript(scriptHash));
-  } catch (error) {
-    console.log('Error fetching script hash:', scriptHash);
-    console.error(error);
-  }
-
-  return false;
+  return withFallback(primary, secondary, (p) => p.fetchScript(scriptHash));
 }
 
 /**
  * Fetches the latest Calidus key for a given stake pool.
  *
  * @param poolBech32 - The pool ID in bech32 format (e.g., `"pool1..."`).
- * @returns The Calidus key record if found, `null` otherwise.
+ * @returns The Calidus key record if found, `null` if the pool has none.
+ * @throws {@link ProviderError} if the provider is unreachable or errors.
  *
  * @example
  * ```ts
@@ -182,13 +175,8 @@ export async function getScript(scriptHash: string): Promise<Record<string, unkn
  * ```
  */
 export async function fetchCalidusKey(poolBech32: string): Promise<CalidusKey | null> {
-  try {
-    const { primary, secondary } = getProviders();
-    return await withFallback(primary, secondary, (p) => p.fetchCalidusKey(poolBech32));
-  } catch (error) {
-    console.error('Error fetching Calidus key:', error);
-    return null;
-  }
+  const { primary, secondary } = getProviders();
+  return withFallback(primary, secondary, (p) => p.fetchCalidusKey(poolBech32));
 }
 
 /**
@@ -233,9 +221,15 @@ const DREP_NAME_READERS: readonly ((m: Record<string, unknown>) => unknown)[] = 
  * top-level `name`) and accepts each as either a plain string or a JSON-LD
  * typed value (`{ "@value": "..." }`).
  *
+ * Off-chain metadata lives at an operator-controlled URL and is expected to be
+ * flaky, so a metadata document that is unreachable, non-JSON, or missing a
+ * name yields `undefined` rather than throwing. Only the on-chain lookup
+ * through the configured provider raises.
+ *
  * @param drepId - The DRep ID in bech32 format.
  * @returns The DRep name if found, `undefined` if metadata lacks a usable name
- *   (or is unreachable / not JSON), `null` on provider error or unknown DRep.
+ *   (or is unreachable / not JSON), `null` if the DRep is not registered.
+ * @throws {@link ProviderError} if the provider is unreachable or errors.
  *
  * @example
  * ```ts
@@ -243,14 +237,8 @@ const DREP_NAME_READERS: readonly ((m: Record<string, unknown>) => unknown)[] = 
  * ```
  */
 export async function fetchDrepName(drepId: string): Promise<string | undefined | null> {
-  let info: DrepInfo[];
-  try {
-    const { primary, secondary } = getProviders();
-    info = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
-  } catch (error) {
-    console.error('Error fetching DRep name:', error);
-    return null;
-  }
+  const { primary, secondary } = getProviders();
+  const info = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
 
   if (info.length === 0) return null;
   if (!info[0].meta_url) return undefined;
@@ -263,8 +251,9 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
     });
     if (!metaResponse.ok) return undefined;
     metadata = (await metaResponse.json()) as Record<string, unknown>;
-  } catch (error) {
-    console.error('Error fetching DRep metadata:', error);
+  } catch {
+    // Operator-controlled URL: unreachable or non-JSON is a missing name, not
+    // a provider outage.
     return undefined;
   }
 
@@ -281,7 +270,9 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
  * Validates that a DRep ID is registered.
  *
  * @param drepId - The DRep ID in bech32 format.
- * @returns `true` if the DRep is registered, `false` otherwise.
+ * @returns `true` if the DRep is registered, `false` if it is not.
+ * @throws {@link ProviderError} if the provider is unreachable or errors. A
+ *   DRep is only reported unregistered on an answer we actually received.
  *
  * @example
  * ```ts
@@ -289,14 +280,9 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
  * ```
  */
 export async function validateDrep(drepId: string): Promise<boolean> {
-  try {
-    const { primary, secondary } = getProviders();
-    const data = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
-    return data.length > 0;
-  } catch (error) {
-    console.error('Error validating DRep:', error);
-    return false;
-  }
+  const { primary, secondary } = getProviders();
+  const data = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
+  return data.length > 0;
 }
 
 /**
@@ -307,7 +293,9 @@ export async function validateDrep(drepId: string): Promise<boolean> {
  * then lexicographically. An address holding no handles yields an empty array.
  *
  * @param address - The Cardano address (stake or payment address).
- * @returns All handles held by the address, most representative first.
+ * @returns All handles held by the address, most representative first. Empty
+ *   if the address holds none.
+ * @throws {@link ProviderError} if the provider is unreachable or errors.
  *
  * @example
  * ```ts
@@ -316,14 +304,8 @@ export async function validateDrep(drepId: string): Promise<boolean> {
  * ```
  */
 export async function fetchHandles(address: string): Promise<string[]> {
-  try {
-    const { primary, secondary } = getProviders();
-    return await withFallback(primary, secondary, (p) => p.fetchHandles(address));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('Error fetching handles:', message);
-    return [];
-  }
+  const { primary, secondary } = getProviders();
+  return withFallback(primary, secondary, (p) => p.fetchHandles(address));
 }
 
 /**
@@ -350,7 +332,8 @@ export async function fetchHandle(address: string): Promise<string | null> {
  * Fetches transaction information.
  *
  * @param txHash - Transaction hash in hex format.
- * @returns The transaction data if found, `null` otherwise.
+ * @returns The transaction data if found, `null` if no such transaction exists.
+ * @throws {@link ProviderError} if the provider is unreachable or errors.
  *
  * @example
  * ```ts
@@ -359,20 +342,17 @@ export async function fetchHandle(address: string): Promise<string | null> {
  * ```
  */
 export async function fetchTxInfo(txHash: string): Promise<TxInfo | null> {
-  try {
-    const { primary, secondary } = getProviders();
-    return await withFallback(primary, secondary, (p) => p.fetchTxInfo(txHash));
-  } catch (error) {
-    console.error('Error fetching tx info:', error);
-    return null;
-  }
+  const { primary, secondary } = getProviders();
+  return withFallback(primary, secondary, (p) => p.fetchTxInfo(txHash));
 }
 
 /**
  * Fetches a stake pool's ticker symbol by its bech32 pool ID.
  *
  * @param poolBech32 - The pool ID in bech32 format (e.g., `"pool1..."`).
- * @returns The ticker string (e.g., `"NUTS"`) if found, `null` otherwise.
+ * @returns The ticker string (e.g., `"NUTS"`) if the pool registered one,
+ *   `null` otherwise.
+ * @throws {@link ProviderError} if the provider is unreachable or errors.
  *
  * @example
  * ```ts
@@ -381,14 +361,9 @@ export async function fetchTxInfo(txHash: string): Promise<TxInfo | null> {
  * ```
  */
 export async function fetchPoolTicker(poolBech32: string): Promise<string | null> {
-  try {
-    const { primary, secondary } = getProviders();
-    const metadata = await withFallback(primary, secondary, (p) => p.fetchPoolMetadata(poolBech32));
-    return metadata?.ticker ?? null;
-  } catch (error) {
-    console.error('Error fetching pool ticker:', error);
-    return null;
-  }
+  const { primary, secondary } = getProviders();
+  const metadata = await withFallback(primary, secondary, (p) => p.fetchPoolMetadata(poolBech32));
+  return metadata?.ticker ?? null;
 }
 
 /**
@@ -456,7 +431,9 @@ function asPoolField(v: unknown): string | null {
  * survey 2026-05-27) without disturbing the happy path.
  *
  * @param poolBech32 - The pool ID in bech32 format (e.g., `"pool1..."`).
- * @returns The pool metadata if found, `null` otherwise.
+ * @returns The pool metadata if found, `null` if no such pool exists.
+ * @throws {@link ProviderError} if the provider is unreachable or errors. The
+ *   best-effort off-chain recovery fetch never throws.
  *
  * @example
  * ```ts
@@ -465,14 +442,8 @@ function asPoolField(v: unknown): string | null {
  * ```
  */
 export async function fetchPoolMetadata(poolBech32: string): Promise<PoolMetadata | null> {
-  let meta: PoolMetadata | null;
-  try {
-    const { primary, secondary } = getProviders();
-    meta = await withFallback(primary, secondary, (p) => p.fetchPoolMetadata(poolBech32));
-  } catch (error) {
-    console.error('Error fetching pool metadata:', error);
-    return null;
-  }
+  const { primary, secondary } = getProviders();
+  const meta = await withFallback(primary, secondary, (p) => p.fetchPoolMetadata(poolBech32));
 
   if (!meta) return null;
   if (meta.ticker || meta.name || !meta.meta_url) return meta;
@@ -512,6 +483,8 @@ const NAMEABLE_PREFIXES: NameablePrefix[] = [
  *
  * @param bech32Id - A bech32-encoded Cardano identifier.
  * @returns The resolved name, or `null` if not found or the prefix is unsupported.
+ * @throws {@link ProviderError} if the provider is unreachable or errors,
+ *   propagated from the underlying lookup.
  *
  * @example
  * ```ts
@@ -523,10 +496,9 @@ const NAMEABLE_PREFIXES: NameablePrefix[] = [
 export async function fetchName(bech32Id: string): Promise<string | null> {
   const prefix = NAMEABLE_PREFIXES.find((p) => bech32Id.startsWith(p));
 
-  if (!prefix) {
-    console.error(`Unsupported bech32 prefix in: ${bech32Id}`);
-    return null;
-  }
+  // An unsupported prefix is a caller mistake, not a provider outage, and the
+  // null return already says so.
+  if (!prefix) return null;
 
   switch (prefix) {
     case 'addr':
@@ -553,6 +525,8 @@ export async function fetchName(bech32Id: string): Promise<string | null> {
  *
  * @param bech32Id - A bech32-encoded pool, DRep, or address/stake identifier.
  * @returns A {@link NameResult} or `null` if the entity cannot be resolved.
+ * @throws {@link ProviderError} if the provider is unreachable or errors,
+ *   propagated from the underlying lookup.
  *
  * @example
  * ```ts
@@ -563,10 +537,9 @@ export async function fetchName(bech32Id: string): Promise<string | null> {
 export async function fetchIdentity(bech32Id: string): Promise<NameResult | null> {
   const prefix = NAMEABLE_PREFIXES.find((p) => bech32Id.startsWith(p));
 
-  if (!prefix) {
-    console.error(`Unsupported bech32 prefix in: ${bech32Id}`);
-    return null;
-  }
+  // An unsupported prefix is a caller mistake, not a provider outage, and the
+  // null return already says so.
+  if (!prefix) return null;
 
   switch (prefix) {
     case 'addr':
