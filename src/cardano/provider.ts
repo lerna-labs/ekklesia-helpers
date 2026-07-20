@@ -69,8 +69,14 @@ export interface CardanoProvider {
   /** Fetch the latest Calidus key for a stake pool. */
   fetchCalidusKey(poolBech32: string): Promise<CalidusKey | null>;
 
-  /** Fetch the Cardano handle for an address. */
-  fetchHandle(address: string): Promise<string | null>;
+  /**
+   * Fetch every Cardano handle held by an address.
+   *
+   * Implementations must return a deterministically ordered list so repeated
+   * lookups for the same address agree. Where the holder has designated a
+   * default handle, it comes first.
+   */
+  fetchHandles(address: string): Promise<string[]>;
 }
 
 /**

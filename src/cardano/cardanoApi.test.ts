@@ -6,6 +6,7 @@ import {
   fetchDrepName,
   validateDrep,
   fetchHandle,
+  fetchHandles,
   fetchTxInfo,
   fetchPoolTicker,
   fetchPoolMetadata,
@@ -247,7 +248,102 @@ describe('cardanoApi', () => {
     });
   });
 
+  describe('fetchHandles', () => {
+    const HANDLE_POLICY = 'f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a';
+
+    it('returns every handle from Handle.me with the default first', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({
+          handles: ['zeta', 'ada', 'bigirishlion', '_a'],
+          default_handle: 'bigirishlion',
+        }),
+      });
+      const result = await fetchHandles('stake1uabc');
+      // Default first, then shortest-first with a lexicographic tiebreak.
+      expect(result).toEqual(['bigirishlion', '_a', 'ada', 'zeta']);
+    });
+
+    it('orders handles deterministically when there is no default', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ handles: ['zeta', 'ada', 'bob', 'a'] }),
+      });
+      expect(await fetchHandles('stake1uabc')).toEqual(['a', 'ada', 'bob', 'zeta']);
+    });
+
+    it('returns the same order regardless of how the API happens to sort', async () => {
+      const shuffles = [
+        ['zeta', 'ada', 'bob', 'a'],
+        ['a', 'bob', 'zeta', 'ada'],
+        ['bob', 'a', 'ada', 'zeta'],
+      ];
+      for (const handles of shuffles) {
+        resetProviders();
+        mockFetch.mockResolvedValueOnce({ status: 200, json: async () => ({ handles }) });
+        expect(await fetchHandles('stake1uabc')).toEqual(['a', 'ada', 'bob', 'zeta']);
+      }
+    });
+
+    it('falls back to default_handle when the response omits the handles array', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ default_handle: 'alice' }),
+      });
+      expect(await fetchHandles('stake1uabc')).toEqual(['alice']);
+    });
+
+    it('returns an empty array when the address holds no handles', async () => {
+      mockFetch.mockResolvedValueOnce({ status: 404 });
+      expect(await fetchHandles('stake1uabc')).toEqual([]);
+    });
+
+    it('enumerates every handle asset via the Koios fallback', async () => {
+      mockFetch.mockResolvedValueOnce({ status: 500 }); // Handle.me unavailable
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          { policy_id: HANDLE_POLICY, asset_name: 'a1' },
+          { policy_id: HANDLE_POLICY, asset_name: 'a2' },
+          { policy_id: HANDLE_POLICY, asset_name: 'a3' },
+        ],
+      });
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          { asset_name_ascii: 'zeta' },
+          { asset_name_ascii: 'ada' },
+          { asset_name_ascii: 'bob' },
+        ],
+      });
+      expect(await fetchHandles('stake1uabc')).toEqual(['ada', 'bob', 'zeta']);
+      // All three assets must be looked up, not just the first.
+      const assetInfoBody = JSON.parse(mockFetch.mock.calls[2][1].body);
+      expect(assetInfoBody._asset_list).toHaveLength(3);
+    });
+
+    it('returns an empty array when Koios finds no handle assets', async () => {
+      mockFetch.mockResolvedValueOnce({ status: 500 });
+      mockFetch.mockResolvedValueOnce({ json: async () => [] });
+      expect(await fetchHandles('stake1uabc')).toEqual([]);
+    });
+  });
+
   describe('fetchHandle', () => {
+    it('returns the default handle when an address holds several', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ handles: ['zeta', 'ada', 'ninja'], default_handle: 'ninja' }),
+      });
+      expect(await fetchHandle('stake1uabc')).toBe('ninja');
+    });
+
+    it('picks deterministically when an address holds several and sets no default', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ handles: ['zeta', 'ada', 'bob'] }),
+      });
+      expect(await fetchHandle('stake1uabc')).toBe('ada');
+    });
+
     it('returns handle from Handle.me on 200', async () => {
       mockFetch.mockResolvedValueOnce({
         status: 200,

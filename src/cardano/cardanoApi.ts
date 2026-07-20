@@ -300,7 +300,38 @@ export async function validateDrep(drepId: string): Promise<boolean> {
 }
 
 /**
- * Fetches the Cardano handle for a given address.
+ * Fetches every Cardano handle held by a given address.
+ *
+ * The order is stable across calls. When the holder has designated a default
+ * handle on Handle.me it comes first; the remainder are sorted shortest-first,
+ * then lexicographically. An address holding no handles yields an empty array.
+ *
+ * @param address - The Cardano address (stake or payment address).
+ * @returns All handles held by the address, most representative first.
+ *
+ * @example
+ * ```ts
+ * const handles = await fetchHandles("stake1u...");
+ * // ["_a", "ada", "ninja", "aaron", ...]
+ * ```
+ */
+export async function fetchHandles(address: string): Promise<string[]> {
+  try {
+    const { primary, secondary } = getProviders();
+    return await withFallback(primary, secondary, (p) => p.fetchHandles(address));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Error fetching handles:', message);
+    return [];
+  }
+}
+
+/**
+ * Fetches the single most representative Cardano handle for a given address.
+ *
+ * Equivalent to the first entry of {@link fetchHandles} — the holder's own
+ * default handle where they have set one. Use {@link fetchHandles} when an
+ * address may hold several and the caller wants to choose between them.
  *
  * @param address - The Cardano address (stake or payment address).
  * @returns The handle name if found, `null` otherwise.
@@ -311,14 +342,8 @@ export async function validateDrep(drepId: string): Promise<boolean> {
  * ```
  */
 export async function fetchHandle(address: string): Promise<string | null> {
-  try {
-    const { primary, secondary } = getProviders();
-    return await withFallback(primary, secondary, (p) => p.fetchHandle(address));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error('Error fetching handle:', message);
-    return null;
-  }
+  const handles = await fetchHandles(address);
+  return handles[0] ?? null;
 }
 
 /**

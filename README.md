@@ -97,7 +97,8 @@ await fetchIdentity('pool1qqqqqdk4zh...');
 | `fetchCalidusKey`   | Fetches the calidus (pool cold) key for a stake pool               |
 | `fetchDrepName`     | Fetches the on-chain registered name for a DRep                    |
 | `validateDrep`      | Validates a DRep ID and returns its registration status            |
-| `fetchHandle`       | Resolves an ADA Handle for an address (Handle.me + provider)       |
+| `fetchHandle`       | Resolves the most representative ADA Handle for an address         |
+| `fetchHandles`      | Resolves every ADA Handle held by an address, in a stable order    |
 | `fetchTxInfo`       | Fetches detailed transaction info                                  |
 | `fetchPoolTicker`   | Fetches a stake pool's ticker symbol                               |
 | `fetchPoolMetadata` | Fetches full pool metadata (ticker, name, description, homepage)   |
