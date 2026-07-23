@@ -7,9 +7,14 @@
 import { Address, BaseAddress, RewardAddress } from '@emurgo/cardano-serialization-lib-nodejs';
 
 import type { CardanoProvider } from './provider.js';
-import { ProviderError, UnsupportedOperationError, type PoolMetadata } from './provider.js';
+import {
+  ProviderError,
+  UnsupportedOperationError,
+  errorFromResponse,
+  type PoolMetadata,
+} from './provider.js';
 import type { CalidusKey, DrepInfo, TxIO, TxInfo } from './cardanoApi.js';
-import { fetchHandleMe } from './koiosProvider.js';
+import { fetchHandleMe, orderHolderHandles } from './koiosProvider.js';
 
 /** Configuration for the Blockfrost provider. */
 export interface BlockfrostConfig {
@@ -201,13 +206,14 @@ export class BlockfrostProvider implements CardanoProvider {
     throw new UnsupportedOperationError(this.name, 'fetchCalidusKey');
   }
 
-  async fetchHandle(address: string): Promise<string | null> {
+  async fetchHandles(address: string): Promise<string[]> {
     // Handle.me works independently of blockchain provider
     try {
-      return await fetchHandleMe(address, this.config.networkName);
+      const holder = await fetchHandleMe(address, this.config.networkName);
+      return holder ? orderHolderHandles(holder) : [];
     } catch {
       // Blockfrost doesn't have an efficient handle asset lookup
-      throw new UnsupportedOperationError(this.name, 'fetchHandle (asset fallback)');
+      throw new UnsupportedOperationError(this.name, 'fetchHandles (asset fallback)');
     }
   }
 
@@ -221,7 +227,7 @@ export class BlockfrostProvider implements CardanoProvider {
       });
       if (response.status === 404) return null;
       if (!response.ok) {
-        throw new ProviderError(this.name, `GET ${path} returned ${response.status}`);
+        throw await errorFromResponse(this.name, `GET ${path}`, response);
       }
       return (await response.json()) as T;
     } catch (error) {

@@ -6,6 +6,7 @@ import {
   fetchDrepName,
   validateDrep,
   fetchHandle,
+  fetchHandles,
   fetchTxInfo,
   fetchPoolTicker,
   fetchPoolMetadata,
@@ -13,6 +14,7 @@ import {
   fetchIdentity,
   resetProviders,
 } from './cardanoApi.js';
+import { ProviderError, ProviderAuthError, ProviderRateLimitError } from './provider.js';
 
 // Valid script hash for format validation (28 bytes = 56 hex chars)
 const validScriptHash = '2ac096b860eb407ffb4a8955ef15c3774be4c632f6d3310925f2026f';
@@ -69,10 +71,9 @@ describe('cardanoApi', () => {
       await expect(getScript('invalidhash')).rejects.toThrow('Not a valid script hash');
     });
 
-    it('returns false on fetch error', async () => {
+    it('throws rather than reporting a missing script when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const result = await getScript(validScriptHash);
-      expect(result).toBe(false);
+      await expect(getScript(validScriptHash)).rejects.toThrow(ProviderError);
     });
   });
 
@@ -104,10 +105,9 @@ describe('cardanoApi', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null on fetch error', async () => {
+    it('throws rather than reporting no key when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const result = await fetchCalidusKey('pool1abc');
-      expect(result).toBeNull();
+      await expect(fetchCalidusKey('pool1abc')).rejects.toThrow(ProviderError);
     });
   });
 
@@ -220,9 +220,16 @@ describe('cardanoApi', () => {
       expect(await fetchDrepName('drep1abc')).toBeUndefined();
     });
 
-    it('returns null on primary fetch error', async () => {
+    it('throws rather than reporting an unknown DRep when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      expect(await fetchDrepName('drep1abc')).toBeNull();
+      await expect(fetchDrepName('drep1abc')).rejects.toThrow(ProviderError);
+    });
+
+    it('still returns undefined when only the off-chain metadata is unreachable', async () => {
+      mockFetch
+        .mockResolvedValueOnce(mockDrepInfo('https://meta.example.com/drep.json'))
+        .mockRejectedValueOnce(new Error('Network error'));
+      expect(await fetchDrepName('drep1abc')).toBeUndefined();
     });
   });
 
@@ -241,13 +248,289 @@ describe('cardanoApi', () => {
       expect(await validateDrep('drep1nonexistent')).toBe(false);
     });
 
-    it('returns false on error', async () => {
+    it('throws rather than reporting the DRep unregistered when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      expect(await validateDrep('drep1abc')).toBe(false);
+      await expect(validateDrep('drep1abc')).rejects.toThrow(ProviderError);
+    });
+  });
+
+  describe('provider availability (issue #9)', () => {
+    // The reported symptom: an expired API token made every lookup answer
+    // "not found", so callers could not tell an outage from a real absence.
+    const expiredToken = { ok: false, status: 401 };
+
+    it('surfaces an expired token instead of reporting the tx missing', async () => {
+      mockFetch.mockResolvedValueOnce(expiredToken);
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
+    });
+
+    it('surfaces an expired token instead of reporting the DRep unregistered', async () => {
+      mockFetch.mockResolvedValueOnce(expiredToken);
+      await expect(validateDrep('drep1abc')).rejects.toThrow(ProviderError);
+    });
+
+    it('names the failing provider in the error', async () => {
+      mockFetch.mockResolvedValueOnce(expiredToken);
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/koios/i);
+    });
+
+    it('propagates through fetchName rather than resolving to null', async () => {
+      mockFetch.mockResolvedValue(expiredToken);
+      await expect(fetchName('pool1abc')).rejects.toThrow(ProviderError);
+    });
+
+    it('propagates through fetchIdentity rather than resolving to null', async () => {
+      mockFetch.mockResolvedValue(expiredToken);
+      await expect(fetchIdentity('pool1abc')).rejects.toThrow(ProviderError);
+    });
+
+    // Bodies below are the real Koios responses, captured with an expired,
+    // an invalid and a malformed token. All three are 403 with a plain text
+    // body, so the status alone cannot tell them apart.
+    it('surfaces the Koios explanation for an expired subscription', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () =>
+          'Subscription expired, Please renew your token from https://koios.rest/Profile.html',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/Subscription expired/);
+    });
+
+    it('distinguishes an invalid token from an expired one', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () =>
+          'Unauthorized Auth Token, Please verify your token created from https://koios.rest/Profile.html',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/Unauthorized Auth Token/);
+    });
+
+    it('includes the status code alongside the explanation', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired, Please renew your token',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/HTTP 403/);
+    });
+
+    it('still reports the status when the body cannot be read', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 503,
+        text: async () => {
+          throw new Error('stream closed');
+        },
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/HTTP 503/);
+    });
+
+    it('truncates a runaway error body rather than flooding the log', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => 'x'.repeat(5000),
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(/\.\.\.$/);
+      await fetchTxInfo('abc123').catch((e) => {
+        expect(e.message.length).toBeLessThan(400);
+      });
+    });
+
+    it('raises ProviderAuthError for an expired subscription', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired, Please renew your token',
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderAuthError);
+    });
+
+    it('raises ProviderAuthError for 401 as well as 403', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 401, text: async () => 'Unauthorized' });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderAuthError);
+    });
+
+    it('keeps auth errors catchable as ProviderError for existing callers', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 403,
+        text: async () => 'Subscription expired',
+      });
+      // Consumers written against the 2.0.0 contract catch the base class.
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
+    });
+
+    it('raises ProviderRateLimitError when throttled', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: () => null },
+      });
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderRateLimitError);
+    });
+
+    it('treats an exhausted quota as rate limiting, not bad credentials', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 402,
+        text: async () => 'Daily request limit exceeded',
+        headers: { get: () => null },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error).toBeInstanceOf(ProviderRateLimitError);
+      expect(error).not.toBeInstanceOf(ProviderAuthError);
+    });
+
+    it('exposes Retry-After so callers can honour the provider backoff', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: (h: string) => (h === 'retry-after' ? '30' : null) },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error.retryAfterSeconds).toBe(30);
+    });
+
+    it('leaves retryAfterSeconds undefined when the header is absent or junk', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 429,
+        text: async () => 'Too many requests',
+        headers: { get: () => 'not-a-number' },
+      });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error.retryAfterSeconds).toBeUndefined();
+    });
+
+    it('leaves a server error as a plain transient ProviderError', async () => {
+      mockFetch.mockResolvedValue({ ok: false, status: 503, text: async () => 'Bad gateway' });
+      const error = await fetchTxInfo('abc123').catch((e) => e);
+      expect(error).toBeInstanceOf(ProviderError);
+      expect(error).not.toBeInstanceOf(ProviderAuthError);
+      expect(error).not.toBeInstanceOf(ProviderRateLimitError);
+      expect(error.status).toBe(503);
+    });
+
+    it('does not throw when the provider answers that nothing was found', async () => {
+      mockFetch.mockResolvedValueOnce({ json: async () => [] });
+      expect(await fetchTxInfo('abc123')).toBeNull();
+    });
+
+    it('still tries the secondary provider before giving up', async () => {
+      process.env.BLOCKFROST_URL = 'https://blockfrost.example';
+      process.env.BLOCKFROST_PROJECT_ID = 'test-project';
+      resetProviders();
+      mockFetch.mockResolvedValue(expiredToken);
+      // Both providers are down, so this still rejects — but only after the
+      // secondary was actually consulted.
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
+      const hosts = mockFetch.mock.calls.map((c) => String(c[0]));
+      expect(hosts.some((u) => u.includes('koios'))).toBe(true);
+      expect(hosts.some((u) => u.includes('blockfrost'))).toBe(true);
+    });
+  });
+
+  describe('fetchHandles', () => {
+    const HANDLE_POLICY = 'f0ff48bbb7bbe9d59a40f1ce90e9e9d0ff5002ec48f232b49ca0fb9a';
+
+    it('returns every handle from Handle.me with the default first', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({
+          handles: ['zeta', 'ada', 'bigirishlion', '_a'],
+          default_handle: 'bigirishlion',
+        }),
+      });
+      const result = await fetchHandles('stake1uabc');
+      // Default first, then shortest-first with a lexicographic tiebreak.
+      expect(result).toEqual(['bigirishlion', '_a', 'ada', 'zeta']);
+    });
+
+    it('orders handles deterministically when there is no default', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ handles: ['zeta', 'ada', 'bob', 'a'] }),
+      });
+      expect(await fetchHandles('stake1uabc')).toEqual(['a', 'ada', 'bob', 'zeta']);
+    });
+
+    it('returns the same order regardless of how the API happens to sort', async () => {
+      const shuffles = [
+        ['zeta', 'ada', 'bob', 'a'],
+        ['a', 'bob', 'zeta', 'ada'],
+        ['bob', 'a', 'ada', 'zeta'],
+      ];
+      for (const handles of shuffles) {
+        resetProviders();
+        mockFetch.mockResolvedValueOnce({ status: 200, json: async () => ({ handles }) });
+        expect(await fetchHandles('stake1uabc')).toEqual(['a', 'ada', 'bob', 'zeta']);
+      }
+    });
+
+    it('falls back to default_handle when the response omits the handles array', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ default_handle: 'alice' }),
+      });
+      expect(await fetchHandles('stake1uabc')).toEqual(['alice']);
+    });
+
+    it('returns an empty array when the address holds no handles', async () => {
+      mockFetch.mockResolvedValueOnce({ status: 404 });
+      expect(await fetchHandles('stake1uabc')).toEqual([]);
+    });
+
+    it('enumerates every handle asset via the Koios fallback', async () => {
+      mockFetch.mockResolvedValueOnce({ status: 500 }); // Handle.me unavailable
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          { policy_id: HANDLE_POLICY, asset_name: 'a1' },
+          { policy_id: HANDLE_POLICY, asset_name: 'a2' },
+          { policy_id: HANDLE_POLICY, asset_name: 'a3' },
+        ],
+      });
+      mockFetch.mockResolvedValueOnce({
+        json: async () => [
+          { asset_name_ascii: 'zeta' },
+          { asset_name_ascii: 'ada' },
+          { asset_name_ascii: 'bob' },
+        ],
+      });
+      expect(await fetchHandles('stake1uabc')).toEqual(['ada', 'bob', 'zeta']);
+      // All three assets must be looked up, not just the first.
+      const assetInfoBody = JSON.parse(mockFetch.mock.calls[2][1].body);
+      expect(assetInfoBody._asset_list).toHaveLength(3);
+    });
+
+    it('returns an empty array when Koios finds no handle assets', async () => {
+      mockFetch.mockResolvedValueOnce({ status: 500 });
+      mockFetch.mockResolvedValueOnce({ json: async () => [] });
+      expect(await fetchHandles('stake1uabc')).toEqual([]);
     });
   });
 
   describe('fetchHandle', () => {
+    it('returns the default handle when an address holds several', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ handles: ['zeta', 'ada', 'ninja'], default_handle: 'ninja' }),
+      });
+      expect(await fetchHandle('stake1uabc')).toBe('ninja');
+    });
+
+    it('picks deterministically when an address holds several and sets no default', async () => {
+      mockFetch.mockResolvedValueOnce({
+        status: 200,
+        json: async () => ({ handles: ['zeta', 'ada', 'bob'] }),
+      });
+      expect(await fetchHandle('stake1uabc')).toBe('ada');
+    });
+
     it('returns handle from Handle.me on 200', async () => {
       mockFetch.mockResolvedValueOnce({
         status: 200,
@@ -302,10 +585,9 @@ describe('cardanoApi', () => {
       expect(mockFetch.mock.calls[1][0]).toContain('address_assets');
     });
 
-    it('returns null for invalid address prefix via Koios fallback', async () => {
+    it('throws for an invalid address prefix via the Koios fallback', async () => {
       mockFetch.mockResolvedValueOnce({ status: 500 }); // Handle.me fails
-      const result = await fetchHandle('invalid_prefix');
-      expect(result).toBeNull();
+      await expect(fetchHandle('invalid_prefix')).rejects.toThrow(ProviderError);
     });
 
     it('uses preprod Handle.me API when NETWORK_NAME is not mainnet', async () => {
@@ -357,10 +639,9 @@ describe('cardanoApi', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null on fetch error', async () => {
+    it('throws rather than reporting a missing tx when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const result = await fetchTxInfo('abc123');
-      expect(result).toBeNull();
+      await expect(fetchTxInfo('abc123')).rejects.toThrow(ProviderError);
     });
   });
 
@@ -399,10 +680,9 @@ describe('cardanoApi', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null on fetch error', async () => {
+    it('throws rather than reporting no ticker when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
-      const result = await fetchPoolTicker('pool1abc');
-      expect(result).toBeNull();
+      await expect(fetchPoolTicker('pool1abc')).rejects.toThrow(ProviderError);
     });
   });
 

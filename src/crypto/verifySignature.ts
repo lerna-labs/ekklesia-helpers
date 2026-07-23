@@ -237,6 +237,10 @@ function get_key_signature_and_payload(signature: SignatureObject, payload: stri
  * @param address - The bech32-encoded Cardano address of the signer.
  * @param signature - The signature object (Ed25519 or COSE format).
  * @returns `true` if the signature is valid, `false` if invalid, or a {@link SignatureError}.
+ * @throws {@link ProviderError} if chain data is needed and the provider is
+ *   unreachable. Pool addresses trigger a Calidus key lookup, so a returned
+ *   {@link SignatureError} always means the signature genuinely failed to
+ *   verify, never that the key could not be looked up.
  *
  * @example
  * ```ts
@@ -311,6 +315,10 @@ export async function verifySignature(
  * @param signature - The signature object.
  * @param script_body - Optional pre-fetched script body. If not provided, fetched from Koios.
  * @returns `true` if valid, or a {@link SignatureError}.
+ * @throws {@link ProviderError} if `script_body` is omitted and the provider is
+ *   unreachable. An `error` of `'Script not found'` therefore means the script
+ *   is genuinely unpublished, not that the lookup failed. Pass a pre-fetched
+ *   `script_body` to avoid the lookup entirely.
  */
 export async function isPartyToScript(
   payload: string,
@@ -424,6 +432,10 @@ export function getScriptCriteria(
  * @param signatures - Array of signature objects from different signers.
  * @param script_body - Optional pre-fetched script body.
  * @returns `true` if enough valid signatures are present, `false` otherwise, or a {@link SignatureError}.
+ * @throws {@link ProviderError} if `script_body` is omitted and the provider is
+ *   unreachable. Callers gating on completeness must treat a throw as "unknown"
+ *   rather than falling through to the complete branch: a {@link SignatureError}
+ *   is truthy, so `if (!result)` does not catch it.
  */
 export async function validateScriptSignatures(
   payload: string,
