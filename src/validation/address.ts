@@ -42,10 +42,7 @@ export interface CalidusAddressResult {
 
 /** Possible return types from {@link validateAddress}. */
 export type ValidateAddressResult =
-  | string
-  | DrepAddressResult
-  | CalidusAddressResult
-  | AddressError;
+  string | DrepAddressResult | CalidusAddressResult | AddressError;
 
 /** Result from {@link getAddressType}. */
 export interface AddressTypeInfo {
