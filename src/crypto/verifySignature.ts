@@ -350,12 +350,18 @@ export async function isPartyToScript(
 
   const criteria = getScriptCriteria(script_body.value as ScriptContents);
 
-  signature = standardize_signature(signature);
-
-  const { verification_key, ed_sig, signed_payload_hex } = get_key_signature_and_payload(
-    signature,
-    payload,
-  );
+  let verification_key: InstanceType<typeof PublicKey>,
+    ed_sig: InstanceType<typeof Ed25519Signature>,
+    signed_payload_hex: string;
+  try {
+    signature = standardize_signature(signature);
+    ({ verification_key, ed_sig, signed_payload_hex } = get_key_signature_and_payload(
+      signature,
+      payload,
+    ));
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
 
   const SignatureKeyHash = verification_key.hash();
   if (criteria.keys.includes(SignatureKeyHash.to_hex())) {
@@ -463,7 +469,11 @@ export async function validateScriptSignatures(
   const script_criteria = getScriptCriteria(script_body.value as ScriptContents);
 
   for (let sig of signatures) {
-    sig = standardize_signature(sig);
+    try {
+      sig = standardize_signature(sig);
+    } catch (error) {
+      return { error: error instanceof Error ? error.message : String(error) };
+    }
     const is_signature_in_script = await isPartyToScript(payload, address, sig, script_body);
     if (is_signature_in_script === true) {
       const { verification_key } = get_key_signature_and_payload(sig, payload);
