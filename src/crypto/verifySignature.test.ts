@@ -290,6 +290,18 @@ describe('isPartyToScript', () => {
     expect(result).toEqual({ error: 'The signature is not part of the script' });
   });
 
+  it('returns error instead of throwing for a malformed COSE key', async () => {
+    // 83010203 is the CBOR array [1, 2, 3], not a Map.
+    await expect(
+      isPartyToScript(
+        generic_payload,
+        ms.one.cip105,
+        { COSE_Sign1_hex: '00', COSE_Key_hex: '83010203' },
+        ms.one.script as never,
+      ),
+    ).resolves.toEqual({ error: 'COSE Key is invalid' });
+  });
+
   it('skips getScript call when script_body is provided', async () => {
     await isPartyToScript(
       generic_payload,
@@ -342,6 +354,17 @@ describe('validateScriptSignatures', () => {
       ).toEqual({
         error: 'Signatures must be an array',
       });
+    });
+
+    it('returns error instead of throwing for a malformed signature', async () => {
+      await expect(
+        validateScriptSignatures(
+          generic_payload,
+          ms.one.cip105,
+          [{ signature: 'not-a-valid-signature', publicKey: basic_signing_stake_key.publicKey }],
+          ms.one.script as never,
+        ),
+      ).resolves.toEqual({ error: 'Signature is invalid' });
     });
   });
 
