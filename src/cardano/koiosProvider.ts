@@ -41,6 +41,38 @@ interface KoiosPoolInfo {
   } | null;
 }
 
+/** Per-attempt timeout for a Koios/Handle.me HTTP call. */
+const REQUEST_TIMEOUT_MS = 10_000;
+
+/** Total attempts per call: the initial try plus one retry. */
+const MAX_ATTEMPTS = 2;
+
+/**
+ * `fetch()` bounded by a per-attempt timeout, with a bounded retry.
+ *
+ * A slow upstream can otherwise hold a request open indefinitely. Each
+ * attempt gets its own {@link AbortController}; an attempt that times out or
+ * throws is retried up to {@link MAX_ATTEMPTS} times before the error (with
+ * an explicit timeout message, when that's what happened) propagates.
+ */
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } catch (error) {
+      lastError = controller.signal.aborted
+        ? new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms: ${url}`)
+        : error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError;
+}
+
 /**
  * Cardano data provider backed by the Koios REST API.
  */
@@ -144,7 +176,7 @@ export class KoiosProvider implements CardanoProvider {
 
   private async get<T>(path: string): Promise<T> {
     try {
-      const response = await fetch(`${this.config.apiUrl}${path}`, {
+      const response = await fetchWithRetry(`${this.config.apiUrl}${path}`, {
         headers: {
           'Content-Type': 'application/json',
           authorization: `Bearer ${this.config.apiToken}`,
@@ -163,7 +195,7 @@ export class KoiosProvider implements CardanoProvider {
 
   private async post<T>(path: string, body: unknown): Promise<T> {
     try {
-      const response = await fetch(`${this.config.apiUrl}${path}`, {
+      const response = await fetchWithRetry(`${this.config.apiUrl}${path}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -221,7 +253,7 @@ export async function fetchHandleMe(
 ): Promise<HandleMeHolder | null> {
   const baseUrl =
     networkName === 'mainnet' ? 'https://api.handle.me' : 'https://preprod.api.handle.me';
-  const response = await fetch(`${baseUrl}/holders/${address}`);
+  const response = await fetchWithRetry(`${baseUrl}/holders/${address}`, {});
   if (response.status === 200 || response.status === 202) {
     const data = (await response.json()) as { handles?: string[]; default_handle?: string };
     const handles = Array.isArray(data.handles) ? data.handles.filter(Boolean) : [];
