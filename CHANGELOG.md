@@ -1,5 +1,19 @@
 # @lerna-labs/ekklesia-helpers
 
+## 2.0.1
+
+### Patch Changes
+
+- 7a61091: Bound Koios and Handle.me requests with a timeout and a retry
+
+  `KoiosProvider` and `fetchHandleMe` called `fetch()` with no timeout, so a slow upstream could hold a request open indefinitely. Each attempt is now bounded by a 10 second `AbortController` timeout and retried once before the error propagates.
+
+- 70a005f: `isPartyToScript` and `validateScriptSignatures` now return `{ error }` for a
+  malformed signature or COSE key instead of throwing, matching `verifySignature`.
+  A malformed COSE key previously propagated as an uncaught rejection from these
+  two functions even though their return type promises `SignatureError`.
+- 7b57677: Raise the mongoose dependency floor to ^9.7.2, fixing a moderate-severity prototype pollution issue in update casting present in versions 9.0.0 through 9.7.1. Consumers of this package now resolve a patched mongoose on install.
+
 ## 2.0.0
 
 ### Major Changes
