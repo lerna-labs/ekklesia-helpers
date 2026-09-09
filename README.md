@@ -179,6 +179,10 @@ body is what tells them apart.
 
 The fallback provider is always tried before any of these is raised.
 
+Provider HTTP calls to Koios, Blockfrost, and Handle.me are each bounded by a
+10 second `AbortController` timeout and retried once before the failure
+propagates (and the fallback provider runs, when configured).
+
 Off-chain metadata is deliberately exempt. `fetchDrepName` and
 `fetchPoolMetadata` fetch operator-controlled URLs that are expected to be
 flaky, so an unreachable or malformed metadata document yields `undefined` /
