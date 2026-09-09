@@ -48,13 +48,11 @@ describe('BlockfrostProvider request resilience', () => {
   });
 
   it('retries once after a network failure and returns the retried result', async () => {
-    mockFetch
-      .mockRejectedValueOnce(new Error('ECONNRESET'))
-      .mockResolvedValueOnce({
-        ok: true,
-        status: 200,
-        json: async () => ({ type: 'plutusV2' }),
-      });
+    mockFetch.mockRejectedValueOnce(new Error('ECONNRESET')).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ type: 'plutusV2' }),
+    });
     const result = await new BlockfrostProvider(config()).fetchScript('abc');
     expect(result).toEqual({ type: 'plutusV2' });
     expect(mockFetch).toHaveBeenCalledTimes(2);
