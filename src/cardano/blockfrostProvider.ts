@@ -37,6 +37,38 @@ export function getBlockfrostConfig(): BlockfrostConfig {
   return { url, projectId, networkName: process.env.NETWORK_NAME };
 }
 
+/** Per-attempt timeout for a Blockfrost HTTP call. */
+const REQUEST_TIMEOUT_MS = 10_000;
+
+/** Total attempts per call: the initial try plus one retry. */
+const MAX_ATTEMPTS = 2;
+
+/**
+ * `fetch()` bounded by a per-attempt timeout, with a bounded retry.
+ *
+ * A slow upstream can otherwise hold a request open indefinitely. Each
+ * attempt gets its own {@link AbortController}; an attempt that times out or
+ * throws is retried up to {@link MAX_ATTEMPTS} times before the error (with
+ * an explicit timeout message, when that's what happened) propagates.
+ */
+async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      return await fetch(url, { ...init, signal: controller.signal });
+    } catch (error) {
+      lastError = controller.signal.aborted
+        ? new Error(`Request timed out after ${REQUEST_TIMEOUT_MS}ms: ${url}`)
+        : error;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError;
+}
+
 /** Blockfrost /txs/{hash} response (relevant fields). */
 interface BfTxContent {
   hash: string;
@@ -218,11 +250,11 @@ export class BlockfrostProvider implements CardanoProvider {
   }
 
   /**
-   * GET a Blockfrost endpoint. Returns `null` for 404 responses.
+   * GET a Blockfrost endpoint via {@link fetchWithRetry}. Returns `null` for 404 responses.
    */
   private async get<T>(path: string): Promise<T | null> {
     try {
-      const response = await fetch(`${this.config.url}${path}`, {
+      const response = await fetchWithRetry(`${this.config.url}${path}`, {
         headers: { project_id: this.config.projectId },
       });
       if (response.status === 404) return null;
