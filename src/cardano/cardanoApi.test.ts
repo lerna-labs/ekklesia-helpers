@@ -1046,7 +1046,8 @@ describe('cardanoApi', () => {
       process.env.BLOCKFROST_URL = 'https://cardano-mainnet.blockfrost.io/api/v0';
       process.env.BLOCKFROST_PROJECT_ID = 'test-project-id';
 
-      // Koios fails with network error
+      // Koios fails with a network error on both its initial attempt and its retry
+      mockFetch.mockRejectedValueOnce(new Error('Koios is down'));
       mockFetch.mockRejectedValueOnce(new Error('Koios is down'));
       // Blockfrost /txs/{hash} succeeds
       mockFetch.mockResolvedValueOnce({
