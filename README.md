@@ -274,5 +274,3 @@ source .local.env && LIVE_TEST=true npx vitest run --reporter=verbose src/cardan
 2. Ensure `npm run lint && npm run test:coverage && npm run build` all pass
 3. Add a changeset (`npx changeset`) describing your change
 4. Open a pull request into `development`
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
