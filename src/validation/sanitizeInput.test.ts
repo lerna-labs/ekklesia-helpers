@@ -31,4 +31,35 @@ describe('sanitizeInput', () => {
   it('preserves line breaks', () => {
     expect(sanitizeInput('line1\nline2')).toBe('line1\nline2');
   });
+
+  describe('nested and overlapping tags', () => {
+    const assertNoTagSurvives = (result: string | false): void => {
+      expect(typeof result).toBe('string');
+      expect(result).not.toMatch(/<[a-zA-Z!/][^<>]*>/);
+    };
+
+    it('does not reassemble a tag hidden inside another tag', () => {
+      const result = sanitizeInput('<scr<script>ipt>');
+      assertNoTagSurvives(result);
+      expect(result).toBe('ipt>');
+    });
+
+    it('does not reassemble a full nested script element', () => {
+      const result = sanitizeInput("<scr<script>ipt>alert('xss')</scr</script>ipt>");
+      assertNoTagSurvives(result);
+      expect(result).toBe("ipt>alert('xss')ipt>");
+    });
+
+    it('does not reassemble doubly-nested tags', () => {
+      const result = sanitizeInput('<<script>script>alert(1)<</script>/script>');
+      assertNoTagSurvives(result);
+      expect(result).toBe('script>alert(1)/script>');
+    });
+
+    it('strips a tag whose content itself looks like a tag boundary', () => {
+      const result = sanitizeInput('<img src=x onerror=alert(1)>');
+      assertNoTagSurvives(result);
+      expect(result).toBe('');
+    });
+  });
 });
