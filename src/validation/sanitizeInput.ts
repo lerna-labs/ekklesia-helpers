@@ -31,8 +31,22 @@ export function sanitizeInput(text: string): string | false {
     return `__URL_PLACEHOLDER_${urls.length - 1}__`;
   });
 
-  // Remove HTML tags and decode HTML entities
-  let sanitizedText = tempText.replace(/<[^>]*>/g, '').replace(/&[a-zA-Z0-9#]+;/g, '');
+  // Remove HTML tags. A single pass can leave behind two fragments that
+  // reassemble into a tag once the text between them is removed (for
+  // example "<scr<script>ipt>" collapsing to "<script>" after one pass),
+  // so the removal repeats on its own until the text stops changing.
+  let sanitizedText = tempText;
+  let previousText: string;
+  do {
+    previousText = sanitizedText;
+    sanitizedText = sanitizedText.replace(/<[^>]*>/g, '');
+  } while (sanitizedText !== previousText);
+
+  // Remove HTML entities the same way, in case removing a tag exposed one.
+  do {
+    previousText = sanitizedText;
+    sanitizedText = sanitizedText.replace(/&[a-zA-Z0-9#]+;/g, '');
+  } while (sanitizedText !== previousText);
 
   // Remove harmful special characters but preserve common useful characters
   const specialChars = /[^\w\s\n\r.,;:?!()[\]{}'"&$@#%*+=/\-_<>€£¥|~`^°]/g;
