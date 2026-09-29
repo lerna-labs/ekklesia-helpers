@@ -63,12 +63,11 @@ describe('loadRoutes', () => {
     expect(fs.readdir).toHaveBeenCalledTimes(2);
   });
 
-  it('handles readdir error gracefully', async () => {
+  it('rejects when the directory cannot be read', async () => {
     const fs = (await import('fs/promises')).default;
     vi.mocked(fs.readdir).mockRejectedValueOnce(new Error('ENOENT'));
     const { loadRoutes } = await import('./loadRoutes.js');
     const app = { use: vi.fn() };
-    await loadRoutes('/nonexistent', app);
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('Error loading routes'));
+    await expect(loadRoutes('/nonexistent', app)).rejects.toThrow('ENOENT');
   });
 });
