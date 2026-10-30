@@ -2,14 +2,18 @@ name: Publish
 
 # Single npm publisher, driven by the branch:
 #   staging -> release-candidate snapshot under the `rc` dist-tag
-#   main    -> production release (`latest`) via Changesets
+#   main    -> maintains the `chore: release` PR; publishes nothing
+#   v* tag  -> production release (`latest`), only from a signed annotated tag
+#              that GitHub verifies, created and pushed by a maintainer
 #
-# Both publish through npm trusted publishing (OIDC), so this one workflow file
-# is the single registered trusted publisher on the npm package and no
+# Both publishes go through npm trusted publishing (OIDC), so this one workflow
+# file is the single registered trusted publisher on the npm package and no
 # NPM_TOKEN is stored. Every publish carries a provenance attestation.
+# Automation never creates a git tag.
 on:
   push:
     branches: [main, staging]
+    tags: ["v*", "!v*-*"]
 
 concurrency:
   group: publish-${{ github.ref }}
@@ -21,12 +25,13 @@ permissions:
   id-token: write
 
 jobs:
-  # Production release from main. changesets/action opens a Version Packages PR
-  # while changesets are pending; once that PR is merged (none pending), it
-  # builds and runs `changeset publish`, publishing `latest` to npm, pushing the
-  # tag, and creating the GitHub Release. Attributed to the Release Manager App.
+  # `chore: release` PR maintenance on main. changesets/action opens and
+  # updates the `chore: release` PR (branch changeset-release/main) while
+  # changesets are pending. It neither tags nor publishes; a maintainer tags
+  # the merged version commit (see README "Releasing"). Attributed to the
+  # Release Manager App.
   release:
-    if: github.ref_name == 'main'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/create-github-app-token@v3
@@ -54,22 +59,15 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
-      # Trusted publishing (OIDC) needs npm >= 11.5.1; node 20 ships npm 10.
-      # Pin to 11 (not latest): npm 12 requires node 22+.
-      - name: Upgrade npm for trusted publishing
-        run: npm install -g npm@11
-
       - run: npm ci
 
-      - name: Create release PR or publish to npm
+      - name: Create or update the release PR
         uses: changesets/action@v1
         with:
           title: "chore: release"
           commit: "chore: version packages"
           version: npm run changeset:version
-          publish: npm run changeset:publish
         env:
-          # No NODE_AUTH_TOKEN: npm publishes via OIDC trusted publishing.
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   # Release candidate from staging. Publishes a Changesets snapshot
@@ -78,7 +76,7 @@ jobs:
   # never moves `latest`. Skipped when there are no pending changesets (the
   # snapshot would otherwise equal the released version already on npm).
   rc:
-    if: github.ref_name == 'staging'
+    if: github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -121,3 +119,73 @@ jobs:
 
       - name: Discard snapshot bump
         run: git checkout -- .
+
+  # Tag verification. The publish job needs this one.
+  verify-tag:
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/verify-release-tag.sh "$GITHUB_REF_NAME"
+
+  # Production release from a verified tag. Publishes `latest` to npm through
+  # OIDC trusted publishing, then creates the GitHub Release with the
+  # CHANGELOG section as notes, attributed to the Release Manager App.
+  publish:
+    needs: verify-tag
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          client-id: ${{ vars.RELEASE_MANAGER_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_MANAGER_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; node 20 ships npm 10.
+      # Pin to 11 (not latest): npm 12 requires node 22+.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@11
+
+      - run: npm ci
+
+      - name: Extract release notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '/^## /{p=($2==v);next} p' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if ! grep -q '[^[:space:]]' "$RUNNER_TEMP/release-notes.md"; then
+            echo "::error::No CHANGELOG.md section found for $version."
+            exit 1
+          fi
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to npm
+        run: npm publish --provenance
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; skipping."
+          else
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi

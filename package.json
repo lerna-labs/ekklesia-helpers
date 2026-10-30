@@ -49,7 +49,6 @@
     "docs:serve": "typedoc && npx serve docs",
     "changeset": "changeset",
     "changeset:version": "changeset version",
-    "changeset:publish": "npm run build && changeset publish",
     "changeset:snapshot": "changeset version --snapshot rc"
   },
   "publishConfig": {
