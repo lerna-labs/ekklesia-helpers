@@ -274,3 +274,15 @@ source .local.env && LIVE_TEST=true npx vitest run --reporter=verbose src/cardan
 2. Ensure `npm run lint && npm run test:coverage && npm run build` all pass
 3. Add a changeset (`npx changeset`) describing your change
 4. Open a pull request into `development`
+
+## Releasing
+
+Merging a change to `main` opens or updates the Version Packages pull request. Merging that pull request publishes nothing and creates no tag. A maintainer creates a signed annotated tag at the version commit on `main` and pushes it:
+
+```bash
+git fetch origin main
+git tag -s vX.Y.Z -m "vX.Y.Z" <version-commit-sha>
+git push origin vX.Y.Z
+```
+
+The tag push runs `publish.yml`. Its first job runs `.github/scripts/verify-release-tag.sh`, and nothing publishes unless the tag is an annotated tag object, GitHub reports its signature as verified, the tagged commit is an ancestor of `origin/main`, and the tag equals the `package.json` version at the tagged commit. The publish job then builds, publishes to npm with provenance, and creates the GitHub Release with the `CHANGELOG.md` section as notes. Release candidates still publish from `staging` under the `rc` dist-tag.
