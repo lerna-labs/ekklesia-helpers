@@ -285,4 +285,4 @@ git tag -s vX.Y.Z -m "vX.Y.Z" <version-commit-sha>
 git push origin vX.Y.Z
 ```
 
-The tag push runs `publish.yml`. Its first job runs `.github/scripts/verify-release-tag.sh`, and nothing publishes unless the tag is an annotated tag object, GitHub reports its signature as verified, the tagged commit is an ancestor of `origin/main`, and the tag equals the `package.json` version at the tagged commit. The publish job then builds, publishes to npm with provenance, and creates the GitHub Release with the `CHANGELOG.md` section as notes. Release candidates still publish from `staging` under the `rc` dist-tag.
+The tag push runs `publish.yml`. Its first job runs `.github/scripts/verify-release-tag.sh`, and nothing publishes unless the tag is an annotated tag object, GitHub reports its signature as verified, the tagged commit is an ancestor of `origin/main`, and the tag is `v` followed by the `package.json` version at the tagged commit. The publish job then builds, publishes to npm with provenance, and creates the GitHub Release with the `CHANGELOG.md` section as notes. Release candidates still publish from `staging` under the `rc` dist-tag.
