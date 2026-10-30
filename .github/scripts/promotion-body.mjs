@@ -8,7 +8,7 @@ const intros = {
   staging:
     "Merging this promotes the queued changes into `staging`, the integration branch for the next release. Version bumps are cut later, on `main`.",
   main:
-    "Merging this promotes the tested release candidate into `main`, where the Release Manager opens a Version Packages PR that cuts the production version, publishes to npm, and creates the GitHub Release.",
+    "Merging this promotes the tested release candidate into `main`, where the Release Manager opens the `chore: release` PR that cuts the production version. Pushing a signed tag at that version commit then publishes to npm and creates the GitHub Release.",
 };
 const intro = intros[target] ?? "";
 

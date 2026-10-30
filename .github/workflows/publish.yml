@@ -2,7 +2,7 @@ name: Publish
 
 # Single npm publisher, driven by the branch:
 #   staging -> release-candidate snapshot under the `rc` dist-tag
-#   main    -> maintains the Version Packages PR; publishes nothing
+#   main    -> maintains the `chore: release` PR; publishes nothing
 #   v* tag  -> production release (`latest`), only from a signed annotated tag
 #              that GitHub verifies, created and pushed by a maintainer
 #
@@ -25,9 +25,9 @@ permissions:
   id-token: write
 
 jobs:
-  # Version Packages PR maintenance on main. changesets/action opens and
-  # updates the Version Packages PR while changesets are pending. It neither
-  # tags nor publishes; a maintainer tags the merged version commit (see
+  # `chore: release` PR maintenance on main. changesets/action opens and
+  # updates the `chore: release` PR (branch changeset-release/main)
+  # while changesets are pending. It neither tags nor publishes; a maintainer tags the merged version commit (see
   # README "Releasing"). Attributed to the Release Manager App.
   release:
     if: github.ref == 'refs/heads/main'
