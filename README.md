@@ -277,7 +277,7 @@ source .local.env && LIVE_TEST=true npx vitest run --reporter=verbose src/cardan
 
 ## Releasing
 
-Merging a change to `main` opens or updates the Version Packages pull request. Merging that pull request publishes nothing and creates no tag. A maintainer creates a signed annotated tag at the version commit on `main` and pushes it:
+Merging a change to `main` opens or updates the `chore: release` pull request (branch `changeset-release/main`). Merging that pull request publishes nothing and creates no tag. A maintainer creates a signed annotated tag at the version commit on `main` and pushes it:
 
 ```bash
 git fetch origin main
