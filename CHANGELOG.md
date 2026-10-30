@@ -1,5 +1,13 @@
 # @lerna-labs/ekklesia-helpers
 
+## 2.0.5
+
+### Patch Changes
+
+- 40de028: Refresh `brace-expansion` in `package-lock.json` to 1.1.21 and 5.0.12, closing the denial-of-service advisories in earlier releases. All three copies are development-only dependencies of the lint and documentation toolchain, so this has no effect on consumers of the published package.
+- 5827928: Refresh the development-only `markdown-it`, `vite` and `vitest` lockfile entries to 14.3.3, 8.3.5 and 4.1.12, closing the advisories in earlier releases. All three are dependencies of the documentation and test toolchain, so this has no effect on consumers of the published package.
+- 85ebc41: Refresh the development-only `source-map-js` lockfile entry to 1.2.2 (GHSA-68fv-2mgg-jv7q).
+
 ## 2.0.4
 
 ### Patch Changes
