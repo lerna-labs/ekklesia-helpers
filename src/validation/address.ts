@@ -281,6 +281,7 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
         keyPrefix = '23';
       // falls through
       case 'drep':
+        if (keyHash.length !== 56) return { error: 'DRep credential must be 28 bytes' };
         switch (keyPrefix) {
           case '22':
             hashType = 'key';
