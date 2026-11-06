@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { bech32 } from 'bech32';
 
 import { validateAddress, pubKeyToBech32, getAddressType, extractParts } from './address.js';
 
@@ -203,6 +204,18 @@ describe('validateAddress — DRep IDs', () => {
       cip129: 'drep1yvve4554njxyun2s5p9q70v88d5jl7r0h34pjhw5f5tmw3sjtrutp',
       isScript: true,
     });
+  });
+
+  it.each([
+    ['CIP-129 key, 40 bytes', 'drep', '22' + 'dbb7'.repeat(20)],
+    ['CIP-129 script, 40 bytes', 'drep', '23' + 'dbb7'.repeat(20)],
+    ['CIP-105 key, 27 bytes', 'drep', 'dbb7'.repeat(13) + 'db'],
+    ['CIP-105 script, 27 bytes', 'drep_script', 'dbb7'.repeat(13) + 'db'],
+  ])('rejects a DRep credential that is not 28 bytes (%s)', (_label, prefix, body) => {
+    const drep_id = bech32.encode(prefix, bech32.toWords(Buffer.from(body, 'hex')), 256);
+    const error = { error: 'DRep credential must be 28 bytes' };
+    expect(getAddressType(drep_id)).toEqual(error);
+    expect(validateAddress(drep_id, 'drep')).toEqual(error);
   });
 });
 
