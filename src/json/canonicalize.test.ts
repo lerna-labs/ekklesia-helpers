@@ -48,7 +48,7 @@ describe('canonicalize', () => {
     });
   });
 
-  it('is independent of key insertion order (F-006 / P65 scenario)', () => {
+  it('is independent of key insertion order', () => {
     const a: Record<string, unknown> = {};
     a.specVersion = '1.0';
     a.ekklesia = { voterId: 'v1', credentialHrp: 'drep' };
