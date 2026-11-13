@@ -183,11 +183,14 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
       };
     }
 
-    case 'pool': {
-      const key_hash = Ed25519KeyHash.from_hex(words_hex);
-      Credential.from_keyhash(key_hash);
+    case 'pool':
+      try {
+        const key_hash = Ed25519KeyHash.from_hex(words_hex);
+        Credential.from_keyhash(key_hash);
+      } catch (_error) {
+        return { error: 'Invalid pool ID' };
+      }
       break;
-    }
 
     case 'calidus':
       try {
@@ -262,6 +265,8 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
 
     switch (prefix) {
       case 'pool':
+        // A pool ID is the bare 28-byte key hash, with no header byte.
+        if (body_hex.length !== 56) return { error: 'Pool ID must be 28 bytes' };
         hashType = 'key';
         type = 'pool';
         break;
@@ -277,6 +282,8 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
         type = 'calidus';
         break;
       case 'drep_script':
+        // A drep_script ID is the bare 28-byte script hash, with no header byte.
+        if (body_hex.length !== 56) return { error: 'DRep credential must be 28 bytes' };
         hashType = 'script';
         keyPrefix = '23';
       // falls through
