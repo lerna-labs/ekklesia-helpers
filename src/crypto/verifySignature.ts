@@ -297,7 +297,7 @@ export async function verifySignature(
       break;
   }
 
-  if (!keyHash.includes(SignatureKeyHash.to_hex())) {
+  if (keyHash !== SignatureKeyHash.to_hex()) {
     return { error: 'The key used for signing does not match the address provided!' };
   }
 

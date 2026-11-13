@@ -23,15 +23,25 @@ if [ "$type" != "tag" ]; then
   fail "Tag $TAG is a lightweight tag (ref points at a $type); release tags must be annotated and signed."
 fi
 
-if ! verification=$(gh api "repos/$REPO/git/tags/$object_sha" --jq '(.verification.verified | tostring) + " " + (.verification.reason // "unknown")' 2>&1); then
-  fail "Could not read tag object $object_sha for $TAG: $verification"
+if ! tag_object=$(gh api "repos/$REPO/git/tags/$object_sha" --jq '[(.verification.verified | tostring), (.verification.reason // "unknown"), .object.type, .object.sha] | @tsv' 2>&1); then
+  fail "Could not read tag object $object_sha for $TAG: $tag_object"
 fi
-if [ "${verification%% *}" != "true" ]; then
-  fail "Tag $TAG signature is not verified by GitHub (reason: ${verification#* })."
+IFS=$'\t' read -r verified reason target_type commit <<< "$tag_object"
+
+if [ "$verified" != "true" ]; then
+  fail "Tag $TAG signature is not verified by GitHub (reason: $reason)."
+fi
+if [ "$target_type" != "commit" ]; then
+  fail "Tag $TAG points at a $target_type, not a commit; a tag of a tag is not accepted."
 fi
 
-if ! commit=$(git rev-parse "refs/tags/$TAG^{commit}" 2>&1); then
-  fail "Tag $TAG is not available in the local checkout: $commit"
+expected="${GITHUB_SHA:-$commit}"
+if [ "$commit" != "$expected" ]; then
+  fail "Signed tag $TAG points at $commit, not the pushed commit $expected."
+fi
+
+if ! git cat-file -e "$commit^{commit}" 2>/dev/null; then
+  fail "Tagged commit $commit for $TAG does not exist in the local checkout."
 fi
 if ! git merge-base --is-ancestor "$commit" origin/main; then
   fail "Tagged commit $commit for $TAG is not an ancestor of origin/main."
