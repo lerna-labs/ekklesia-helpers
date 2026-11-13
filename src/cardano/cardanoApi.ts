@@ -200,7 +200,7 @@ function coerceMetadataString(v: unknown): string | undefined {
 /**
  * Priority-ordered readers for the name field on a DRep metadata document.
  *
- * Order reflects mainnet frequency (see `.claude/trds/SHARED_FETCH_DREP_NAME_ROBUSTNESS.md`):
+ * Order reflects mainnet frequency:
  * `body.dRepName` and `body.givenName` cover ~95% of registrations, with
  * `body.familyName`, `body.name`, and top-level `name` as CIP-119 / pool-style
  * fallbacks for outliers.
@@ -369,7 +369,7 @@ export async function fetchPoolTicker(poolBech32: string): Promise<string | null
 /**
  * Tight per-call timeout for the off-chain recovery fetch in {@link fetchPoolMetadata}.
  *
- * Kept short on purpose: a mainnet survey (see `.claude/pools-mainnet-survey.json`)
+ * Kept short on purpose: a mainnet survey
  * found that ~26% of all live pool lookups hit this path, and ~87% of those URLs
  * are dead, parked, or return HTML — Koios already exhausted its retries before
  * surfacing `meta_json: null` to us. A 3s ceiling keeps the worst-case
