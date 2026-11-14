@@ -265,11 +265,11 @@ describe('verifySignature', () => {
       });
     });
 
-    it("rejects an address whose key hash contains the signer's key hash", async () => {
+    it("rejects a stake address whose payload contains the signer's key hash", async () => {
       const stake_address = withTrailingBytes(mainnet_stake_address);
       expect(
         await verifySignature(generic_payload, stake_address, basic_signing_stake_key),
-      ).toEqual(key_mismatch);
+      ).toEqual({ error: 'Stake address must be 29 bytes' });
     });
   });
 
