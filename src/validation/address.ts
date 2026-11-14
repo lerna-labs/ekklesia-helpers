@@ -271,6 +271,8 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
         type = 'pool';
         break;
       case 'calidus':
+        // A Calidus ID is one header byte followed by a 28-byte hash.
+        if (body_hex.length !== 58) return { error: 'Calidus ID must be 29 bytes' };
         switch (keyPrefix) {
           case 'a1':
             hashType = 'key';
@@ -301,6 +303,8 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
         break;
       case 'stake':
       case 'stake_test':
+        // A stake address is one header byte followed by a 28-byte hash.
+        if (body_hex.length !== 58) return { error: 'Stake address must be 29 bytes' };
         switch (keyPrefix) {
           case 'e0':
           case 'e1':

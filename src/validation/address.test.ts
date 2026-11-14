@@ -291,6 +291,40 @@ describe('getAddressType', () => {
   });
 });
 
+describe('getAddressType — calidus and stake payload length', () => {
+  const hash = 'dbb7'.repeat(14);
+  const encode = (prefix: string, body: string): string =>
+    bech32.encode(prefix, bech32.toWords(Buffer.from(body, 'hex')), 256);
+
+  it.each([
+    ['a1 key', 'calidus', 'a1', 'key'],
+    ['a2 script', 'calidus', 'a2', 'script'],
+    ['e1 key', 'stake', 'e1', 'key'],
+    ['f1 script', 'stake', 'f1', 'script'],
+    ['e0 key', 'stake_test', 'e0', 'key'],
+  ])('accepts a 29-byte ID with header %s', (_label, prefix, header, hashType) => {
+    const type = prefix === 'calidus' ? 'calidus' : 'stake';
+    expect(getAddressType(encode(prefix, header + hash))).toEqual({
+      type,
+      keyHash: hash,
+      hashType,
+    });
+  });
+
+  it.each([
+    ['calidus a1, 30 bytes', 'calidus', 'a1' + hash + 'aa', 'Calidus ID must be 29 bytes'],
+    ['calidus a2, 30 bytes', 'calidus', 'a2' + hash + 'aa', 'Calidus ID must be 29 bytes'],
+    ['calidus a1, 41 bytes', 'calidus', 'a1' + 'dbb7'.repeat(20), 'Calidus ID must be 29 bytes'],
+    ['calidus, 28 bytes', 'calidus', hash, 'Calidus ID must be 29 bytes'],
+    ['stake e1, 30 bytes', 'stake', 'e1' + hash + 'aa', 'Stake address must be 29 bytes'],
+    ['stake f1, 30 bytes', 'stake', 'f1' + hash + 'aa', 'Stake address must be 29 bytes'],
+    ['stake_test e0, 30 bytes', 'stake_test', 'e0' + hash + 'aa', 'Stake address must be 29 bytes'],
+    ['stake, 28 bytes', 'stake', hash, 'Stake address must be 29 bytes'],
+  ])('rejects %s', (_label, prefix, body, error) => {
+    expect(getAddressType(encode(prefix, body))).toEqual({ error });
+  });
+});
+
 describe('extractParts', () => {
   it('splits hex into header and body', () => {
     const [header, body] = extractParts('e1cbeb1cca6db2d343');
