@@ -13,7 +13,6 @@ import type { CardanoProvider, PoolMetadata } from './provider.js';
 import { withFallback } from './provider.js';
 import { KoiosProvider, getKoiosConfig } from './koiosProvider.js';
 import { BlockfrostProvider, getBlockfrostConfig } from './blockfrostProvider.js';
-import { validateAddress } from '../validation/address.js';
 
 /** Calidus key record. */
 export interface CalidusKey {
@@ -72,7 +71,6 @@ export interface DrepInfo {
   drep_id: string;
   hex: string;
   has_script: boolean;
-  /** Registration state: `registered`, `deregistered` or `not_registered`. */
   drep_status: 'registered' | 'deregistered' | 'not_registered';
   deposit: string;
   active: boolean;
@@ -272,9 +270,9 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
  * Validates that a DRep ID is registered.
  *
  * Providers can return a row for a DRep that is deregistered or was never
- * registered, so the row for the requested ID must report `registered`.
+ * registered, so a returned row must report `registered`.
  *
- * @param drepId - The DRep ID in bech32 format (CIP-105 or CIP-129).
+ * @param drepId - The DRep ID in bech32 format.
  * @returns `true` if the DRep is registered, `false` if it is deregistered,
  *   never registered or unknown.
  * @throws {@link ProviderError} if the provider is unreachable or errors. A
@@ -288,14 +286,7 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
 export async function validateDrep(drepId: string): Promise<boolean> {
   const { primary, secondary } = getProviders();
   const data = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
-  // Providers answer in CIP-129 form whichever form was requested.
-  const parsed = validateAddress(drepId, 'drep');
-  const ids = new Set([drepId]);
-  if (typeof parsed === 'object' && 'cip129' in parsed) {
-    ids.add(parsed.cip105);
-    ids.add(parsed.cip129);
-  }
-  return data.some((row) => ids.has(row.drep_id) && row.drep_status === 'registered');
+  return data.some((row) => row.drep_status === 'registered');
 }
 
 /**

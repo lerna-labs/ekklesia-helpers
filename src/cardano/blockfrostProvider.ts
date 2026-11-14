@@ -222,7 +222,10 @@ export class BlockfrostProvider implements CardanoProvider {
         drep_id: drep.drep_id,
         hex: drep.hex,
         has_script: drep.has_script,
-        drep_status: drep.retired ? 'deregistered' : 'registered',
+        drep_status:
+          drep.last_active_epoch === null && !drep.drep_id.startsWith('drep_always_')
+            ? 'not_registered'
+            : 'registered',
         deposit: '0',
         active: !drep.expired,
         expires_epoch_no: drep.last_active_epoch ?? 0,

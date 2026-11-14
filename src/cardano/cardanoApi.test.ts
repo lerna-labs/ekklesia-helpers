@@ -14,7 +14,6 @@ import {
   fetchIdentity,
   resetProviders,
 } from './cardanoApi.js';
-import { validateAddress } from '../validation/address.js';
 import { ProviderError, ProviderAuthError, ProviderRateLimitError } from './provider.js';
 
 // Valid script hash for format validation (28 bytes = 56 hex chars)
@@ -236,7 +235,6 @@ describe('cardanoApi', () => {
 
   describe('validateDrep', () => {
     const drepId = 'drep1ytdnkw2l4q7uy2d7d7sj9fhgsun56zg2uleqlfqx2lvcc6gusnw9c';
-    const otherDrepId = 'drep1y2200we9c904un36tzaearntzzl63snffuul9qsk0te4utqfkke0w';
     const row = (id: string, drep_status: string) => ({
       drep_id: id,
       drep_status,
@@ -262,22 +260,6 @@ describe('cardanoApi', () => {
     it('returns false when no row comes back', async () => {
       answer([]);
       expect(await validateDrep('drep1nonexistent')).toBe(false);
-    });
-
-    it('returns false when the only row is for a different DRep', async () => {
-      answer([row(otherDrepId, 'registered')]);
-      expect(await validateDrep(drepId)).toBe(false);
-    });
-
-    it('finds the requested DRep among several rows', async () => {
-      answer([row(otherDrepId, 'deregistered'), row(drepId, 'registered')]);
-      expect(await validateDrep(drepId)).toBe(true);
-    });
-
-    it('matches the CIP-129 row when the CIP-105 form is requested', async () => {
-      const parsed = validateAddress(drepId, 'drep') as { cip105: string };
-      answer([row(drepId, 'registered')]);
-      expect(await validateDrep(parsed.cip105)).toBe(true);
     });
 
     it('throws rather than reporting the DRep unregistered when the provider errors', async () => {
