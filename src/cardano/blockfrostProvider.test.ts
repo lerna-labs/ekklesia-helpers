@@ -96,3 +96,37 @@ describe('BlockfrostProvider request resilience', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('BlockfrostProvider fetchDrepInfo', () => {
+  const mockFetch = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    mockFetch.mockReset();
+  });
+
+  it('reports a DRep that has not retired as registered', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          drep_id: 'drep1abc',
+          hex: 'aa',
+          amount: '0',
+          has_script: false,
+          retired: false,
+          expired: true,
+          last_active_epoch: 5,
+        }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 404 });
+    const [info] = await new BlockfrostProvider(config()).fetchDrepInfo(['drep1abc']);
+    expect(info.drep_status).toBe('registered');
+    expect(info.active).toBe(false);
+  });
+});

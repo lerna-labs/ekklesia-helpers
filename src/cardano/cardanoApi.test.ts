@@ -14,6 +14,7 @@ import {
   fetchIdentity,
   resetProviders,
 } from './cardanoApi.js';
+import { validateAddress } from '../validation/address.js';
 import { ProviderError, ProviderAuthError, ProviderRateLimitError } from './provider.js';
 
 // Valid script hash for format validation (28 bytes = 56 hex chars)
@@ -234,18 +235,49 @@ describe('cardanoApi', () => {
   });
 
   describe('validateDrep', () => {
-    it('returns true when DRep is found', async () => {
-      mockFetch.mockResolvedValueOnce({
-        json: async () => [{ drep_id: 'drep1abc' }],
-      });
-      expect(await validateDrep('drep1abc')).toBe(true);
+    const drepId = 'drep1ytdnkw2l4q7uy2d7d7sj9fhgsun56zg2uleqlfqx2lvcc6gusnw9c';
+    const otherDrepId = 'drep1y2200we9c904un36tzaearntzzl63snffuul9qsk0te4utqfkke0w';
+    const row = (id: string, drep_status: string) => ({
+      drep_id: id,
+      drep_status,
+      active: false,
+    });
+    const answer = (rows: unknown[]) => mockFetch.mockResolvedValueOnce({ json: async () => rows });
+
+    it('returns true when the DRep is registered, even if inactive', async () => {
+      answer([row(drepId, 'registered')]);
+      expect(await validateDrep(drepId)).toBe(true);
     });
 
-    it('returns false when DRep not found', async () => {
-      mockFetch.mockResolvedValueOnce({
-        json: async () => [],
-      });
+    it('returns false when the DRep is deregistered', async () => {
+      answer([row(drepId, 'deregistered')]);
+      expect(await validateDrep(drepId)).toBe(false);
+    });
+
+    it('returns false when the row is not_registered', async () => {
+      answer([row(drepId, 'not_registered')]);
+      expect(await validateDrep(drepId)).toBe(false);
+    });
+
+    it('returns false when no row comes back', async () => {
+      answer([]);
       expect(await validateDrep('drep1nonexistent')).toBe(false);
+    });
+
+    it('returns false when the only row is for a different DRep', async () => {
+      answer([row(otherDrepId, 'registered')]);
+      expect(await validateDrep(drepId)).toBe(false);
+    });
+
+    it('finds the requested DRep among several rows', async () => {
+      answer([row(otherDrepId, 'deregistered'), row(drepId, 'registered')]);
+      expect(await validateDrep(drepId)).toBe(true);
+    });
+
+    it('matches the CIP-129 row when the CIP-105 form is requested', async () => {
+      const parsed = validateAddress(drepId, 'drep') as { cip105: string };
+      answer([row(drepId, 'registered')]);
+      expect(await validateDrep(parsed.cip105)).toBe(true);
     });
 
     it('throws rather than reporting the DRep unregistered when the provider errors', async () => {
