@@ -234,17 +234,31 @@ describe('cardanoApi', () => {
   });
 
   describe('validateDrep', () => {
-    it('returns true when DRep is found', async () => {
-      mockFetch.mockResolvedValueOnce({
-        json: async () => [{ drep_id: 'drep1abc' }],
-      });
-      expect(await validateDrep('drep1abc')).toBe(true);
+    const drepId = 'drep1ytdnkw2l4q7uy2d7d7sj9fhgsun56zg2uleqlfqx2lvcc6gusnw9c';
+    const row = (id: string, drep_status: string) => ({
+      drep_id: id,
+      drep_status,
+      active: false,
+    });
+    const answer = (rows: unknown[]) => mockFetch.mockResolvedValueOnce({ json: async () => rows });
+
+    it('returns true when the DRep is registered, even if inactive', async () => {
+      answer([row(drepId, 'registered')]);
+      expect(await validateDrep(drepId)).toBe(true);
     });
 
-    it('returns false when DRep not found', async () => {
-      mockFetch.mockResolvedValueOnce({
-        json: async () => [],
-      });
+    it('returns false when the DRep is deregistered', async () => {
+      answer([row(drepId, 'deregistered')]);
+      expect(await validateDrep(drepId)).toBe(false);
+    });
+
+    it('returns false when the row is not_registered', async () => {
+      answer([row(drepId, 'not_registered')]);
+      expect(await validateDrep(drepId)).toBe(false);
+    });
+
+    it('returns false when no row comes back', async () => {
+      answer([]);
       expect(await validateDrep('drep1nonexistent')).toBe(false);
     });
 

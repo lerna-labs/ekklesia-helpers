@@ -71,7 +71,7 @@ export interface DrepInfo {
   drep_id: string;
   hex: string;
   has_script: boolean;
-  registered: boolean;
+  drep_status: 'registered' | 'deregistered' | 'not_registered';
   deposit: string;
   active: boolean;
   expires_epoch_no: number;
@@ -269,8 +269,12 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
 /**
  * Validates that a DRep ID is registered.
  *
+ * Providers can return a row for a DRep that is deregistered or was never
+ * registered, so a returned row must report `registered`.
+ *
  * @param drepId - The DRep ID in bech32 format.
- * @returns `true` if the DRep is registered, `false` if it is not.
+ * @returns `true` if the DRep is registered, `false` if it is deregistered,
+ *   never registered or unknown.
  * @throws {@link ProviderError} if the provider is unreachable or errors. A
  *   DRep is only reported unregistered on an answer we actually received.
  *
@@ -282,7 +286,7 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
 export async function validateDrep(drepId: string): Promise<boolean> {
   const { primary, secondary } = getProviders();
   const data = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
-  return data.length > 0;
+  return data.some((row) => row.drep_status === 'registered');
 }
 
 /**
