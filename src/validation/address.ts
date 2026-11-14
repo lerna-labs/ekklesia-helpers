@@ -49,6 +49,8 @@ export interface AddressTypeInfo {
   type: string;
   keyHash: string;
   hashType: string;
+  /** Network tag from the stake address header (0 testnet, 1 mainnet); `null` for IDs that carry none. */
+  networkId: number | null;
 }
 
 /**
@@ -234,7 +236,7 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
 }
 
 /**
- * Extract the type, key hash, and hash type from a bech32-encoded Cardano address.
+ * Extract the type, key hash, hash type, and network from a bech32-encoded Cardano address.
  *
  * @param bech32Address - A bech32-encoded Cardano address.
  * @returns The decoded address type info, or an error.
@@ -245,6 +247,7 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
  * if (!("error" in info)) {
  *   console.log(info.type);     // "stake"
  *   console.log(info.hashType); // "key"
+ *   console.log(info.networkId); // 1 (mainnet)
  * }
  * ```
  */
@@ -252,6 +255,7 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
   try {
     const { prefix, words } = bech32.decode(bech32Address, 256);
     const body_hex = Buffer.from(bech32.fromWords(words)).toString('hex');
+    let networkId: number | null = null;
     let type: string | undefined, keyHash: string, hashType: string | undefined, keyPrefix: string;
 
     if (body_hex.length > 56) {
@@ -315,6 +319,7 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
             hashType = 'script';
             break;
         }
+        networkId = parseInt(keyPrefix, 16) & 0x0f;
         type = 'stake';
         break;
     }
@@ -323,6 +328,7 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
       type: type!.trim(),
       keyHash: keyHash.trim(),
       hashType: hashType!.trim(),
+      networkId,
     };
   } catch (_error) {
     return { error: 'Not a valid bech32 address' };
