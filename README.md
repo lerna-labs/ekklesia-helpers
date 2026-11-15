@@ -69,7 +69,7 @@ await fetchIdentity('pool1qqqqqdk4zh...');
 | Export            | Description                                                              |
 | ----------------- | ------------------------------------------------------------------------ |
 | `validateAddress` | Validates Cardano addresses (bech32, hex, DRep CIP-105/CIP-129, calidus) |
-| `getAddressType`  | Returns address type, key hash, and hash type from a bech32 address      |
+| `getAddressType`  | Returns type, key hash, hash type, and network of a bech32 address       |
 | `pubKeyToBech32`  | Converts a hex public key to a bech32 address (DRep or calidus)          |
 | `extractParts`    | Extracts header byte and body from a hex-encoded address                 |
 | `sanitizeInput`   | Sanitizes user input (strips HTML tags/entities, preserves URLs)         |
@@ -96,7 +96,7 @@ await fetchIdentity('pool1qqqqqdk4zh...');
 | `getScript`         | Fetches a native script by script hash                             |
 | `fetchCalidusKey`   | Fetches the calidus (pool cold) key for a stake pool               |
 | `fetchDrepName`     | Fetches the on-chain registered name for a DRep                    |
-| `validateDrep`      | Validates a DRep ID and returns its registration status            |
+| `validateDrep`      | Returns true only when the DRep ID is currently registered         |
 | `fetchHandle`       | Resolves the most representative ADA Handle for an address         |
 | `fetchHandles`      | Resolves every ADA Handle held by an address, in a stable order    |
 | `fetchTxInfo`       | Fetches detailed transaction info                                  |

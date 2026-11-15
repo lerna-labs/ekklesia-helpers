@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { bech32 } from 'bech32';
+import cbor from 'cbor';
+import { PrivateKey } from '@emurgo/cardano-serialization-lib-nodejs';
 
 import {
   verifySignature,
@@ -51,6 +53,38 @@ function withTrailingBytes(address: string): string {
   const { prefix, words } = bech32.decode(address, 256);
   const body = Buffer.concat([Buffer.from(bech32.fromWords(words)), Buffer.alloc(12)]);
   return bech32.encode(prefix, bech32.toWords(body), 256);
+}
+
+function toBech32(prefix: string, hex: string): string {
+  return bech32.encode(prefix, bech32.toWords(Buffer.from(hex, 'hex')), 256);
+}
+
+// Signs the payload as a COSE_Sign1 whose protected address header is `address_hex`.
+function coseSign(
+  key: PrivateKey,
+  address_hex: string,
+  payload_hex = generic_payload,
+): { COSE_Sign1_hex: string; COSE_Key_hex: string } {
+  const header = new Map<number | string, unknown>([
+    [1, -8],
+    ['address', Buffer.from(address_hex, 'hex')],
+  ]);
+  const protected_header = cbor.encode(header);
+  const payload = Buffer.from(payload_hex, 'hex');
+  const sig_structure = cbor.encode(['Signature1', protected_header, Buffer.alloc(0), payload]);
+  const signature = Buffer.from(key.sign(sig_structure).to_bytes());
+  const cose_key = new Map<number, unknown>([
+    [1, 1],
+    [3, -8],
+    [-1, 6],
+    [-2, Buffer.from(key.to_public().as_bytes())],
+  ]);
+  return {
+    COSE_Sign1_hex: cbor
+      .encode([protected_header, new Map([['hashed', false]]), payload, signature])
+      .toString('hex'),
+    COSE_Key_hex: cbor.encode(cose_key).toString('hex'),
+  };
 }
 
 describe('verifySignature', () => {
@@ -231,11 +265,80 @@ describe('verifySignature', () => {
       });
     });
 
-    it("rejects an address whose key hash contains the signer's key hash", async () => {
+    it("rejects a stake address whose payload contains the signer's key hash", async () => {
       const stake_address = withTrailingBytes(mainnet_stake_address);
       expect(
         await verifySignature(generic_payload, stake_address, basic_signing_stake_key),
-      ).toEqual(key_mismatch);
+      ).toEqual({ error: 'Stake address must be 29 bytes' });
+    });
+  });
+
+  describe('protected address header', () => {
+    const address_mismatch = { error: 'The signed address does not match the address provided!' };
+    const key = PrivateKey.generate_ed25519();
+    const key_hash = key.to_public().hash().to_hex();
+    const other_hash = PrivateKey.generate_ed25519().to_public().hash().to_hex();
+    const stake_address = toBech32('stake', 'e1' + key_hash);
+    const drep_id = toBech32('drep', '22' + key_hash);
+
+    it('accepts a header naming the claimed stake address', async () => {
+      expect(
+        await verifySignature(generic_payload, stake_address, coseSign(key, 'e1' + key_hash)),
+      ).toBe(true);
+    });
+
+    it('rejects a header naming another address with the same key', async () => {
+      expect(
+        await verifySignature(generic_payload, stake_address, coseSign(key, '61' + key_hash)),
+      ).toEqual(address_mismatch);
+    });
+
+    it('rejects a header naming the claimed stake address on the other network', async () => {
+      expect(
+        await verifySignature(generic_payload, testnet_stake_address, cip30_signing_stake_key),
+      ).toEqual(address_mismatch);
+    });
+
+    it.each([
+      ['the bare key hash', key_hash],
+      ['the CIP-129 ID', '22' + key_hash],
+      ['a mainnet type 6 address', '61' + key_hash],
+      ['a testnet type 6 address', '60' + key_hash],
+    ])('accepts a DRep header naming %s', async (_label, header) => {
+      expect(await verifySignature(generic_payload, drep_id, coseSign(key, header))).toBe(true);
+    });
+
+    it.each([
+      ['the bare key hash of another key', other_hash],
+      ['a type 6 address of another key', '61' + other_hash],
+      ['a stake address of the same key', 'e1' + key_hash],
+    ])('rejects a DRep header naming %s', async (_label, header) => {
+      expect(await verifySignature(generic_payload, drep_id, coseSign(key, header))).toEqual(
+        address_mismatch,
+      );
+    });
+
+    it('accepts a header naming the pool ID when signed with its calidus key', async () => {
+      fetchCalidusKey.mockResolvedValueOnce({ calidus_pub_key: key.to_public().to_hex() });
+      const pool_hex = Buffer.from(bech32.fromWords(bech32.decode(mainnet_pool_id).words));
+      expect(
+        await verifySignature(
+          generic_payload,
+          mainnet_pool_id,
+          coseSign(key, pool_hex.toString('hex')),
+        ),
+      ).toBe(true);
+    });
+
+    it('rejects a header naming another pool', async () => {
+      fetchCalidusKey.mockResolvedValueOnce(null);
+      expect(
+        await verifySignature(
+          generic_payload,
+          toBech32('pool', key_hash),
+          coseSign(key, other_hash),
+        ),
+      ).toEqual(address_mismatch);
     });
   });
 });

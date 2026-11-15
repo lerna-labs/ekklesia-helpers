@@ -166,13 +166,16 @@ function get_cose_header(data: unknown[]): Map<string, unknown> {
 function parse_cose_signature(
   signature: SignatureObject,
   payload: string,
-): { payload_hex: string; signature_hex: string } {
+): { payload_hex: string; signature_hex: string; signed_address_hex: string } {
   const cose_sign1_structure = cbor.decode(
     Buffer.from(signature.COSE_Sign1_hex!, 'hex'),
   ) as unknown[];
 
   const error = validate_cose_sign1(cose_sign1_structure);
   if (error) throw new Error(error.error);
+
+  const protectedHeader = cbor.decode(cose_sign1_structure[0] as Buffer) as Map<string, Buffer>;
+  const signed_address_hex = protectedHeader.get('address')!.toString('hex');
 
   const unprotectedHeader = get_cose_header(cose_sign1_structure);
   const isHashed = unprotectedHeader.get('hashed');
@@ -183,23 +186,26 @@ function parse_cose_signature(
   const payload_hex = make_cose1_sig_structure(payload, cose_sign1_structure);
   const signature_hex = (cose_sign1_structure[3] as Buffer).toString('hex');
 
-  return { payload_hex, signature_hex };
+  return { payload_hex, signature_hex, signed_address_hex };
 }
 
 interface KeySigPayload {
   verification_key: InstanceType<typeof PublicKey>;
   ed_sig: InstanceType<typeof Ed25519Signature>;
   signed_payload_hex: string;
+  signed_address_hex?: string;
 }
 
 function get_key_signature_and_payload(signature: SignatureObject, payload: string): KeySigPayload {
   let public_key_hex: string, ed_signature_hex: string, signed_payload_hex: string;
+  let signed_address_hex: string | undefined;
 
   if (signature.COSE_Sign1_hex) {
     public_key_hex = get_cose_public_key(signature);
-    const { payload_hex, signature_hex } = parse_cose_signature(signature, payload);
-    signed_payload_hex = payload_hex;
-    ed_signature_hex = signature_hex;
+    const parsed = parse_cose_signature(signature, payload);
+    signed_payload_hex = parsed.payload_hex;
+    ed_signature_hex = parsed.signature_hex;
+    signed_address_hex = parsed.signed_address_hex;
   } else {
     if (regExpHex.test(payload)) {
       signed_payload_hex = payload;
@@ -224,7 +230,7 @@ function get_key_signature_and_payload(signature: SignatureObject, payload: stri
     throw new Error('Invalid signature');
   }
 
-  return { verification_key, ed_sig, signed_payload_hex };
+  return { verification_key, ed_sig, signed_payload_hex, signed_address_hex };
 }
 
 /**
@@ -232,6 +238,11 @@ function get_key_signature_and_payload(signature: SignatureObject, payload: stri
  *
  * For pool addresses, performs a Koios API lookup for the pool's calidus key
  * and verifies the signature against that key.
+ *
+ * The protected `address` header of a COSE signature must name the claimed
+ * address. For a DRep it may instead name the DRep key hash, its CIP-129 ID or
+ * a type 6 address carrying the key hash, and for a pool signed with its
+ * calidus key it may name the calidus ID.
  *
  * @param payload - The hex-encoded payload that was signed.
  * @param address - The bech32-encoded Cardano address of the signer.
@@ -267,14 +278,13 @@ export async function verifySignature(
 
   let verification_key: InstanceType<typeof PublicKey>,
     signed_payload_hex: string,
-    ed_sig: InstanceType<typeof Ed25519Signature>;
+    ed_sig: InstanceType<typeof Ed25519Signature>,
+    signed_address_hex: string | undefined;
 
   try {
     signature = standardize_signature(signature);
-    ({ verification_key, ed_sig, signed_payload_hex } = get_key_signature_and_payload(
-      signature,
-      payload,
-    ));
+    ({ verification_key, ed_sig, signed_payload_hex, signed_address_hex } =
+      get_key_signature_and_payload(signature, payload));
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   }
@@ -284,21 +294,33 @@ export async function verifySignature(
 
   let keyHash = type_details.keyHash;
   const SignatureKeyHash = verification_key.hash();
+  const header_addresses = [
+    Buffer.from(bech32.fromWords(bech32.decode(address, 256).words)).toString('hex'),
+  ];
 
   switch (type_details.type) {
     case 'pool': {
       const calidus_key = await fetchCalidusKey(address);
       if (calidus_key != null) {
         keyHash = PublicKey.from_hex(calidus_key.calidus_pub_key).hash().to_hex();
+        header_addresses.push('a1' + keyHash);
       }
       break;
     }
+    case 'drep':
+      // Bare key hash, CIP-129 ID, or CIP-95 type 6 address on testnet or mainnet.
+      header_addresses.push(keyHash, '22' + keyHash, '60' + keyHash, '61' + keyHash);
+      break;
     default:
       break;
   }
 
   if (keyHash !== SignatureKeyHash.to_hex()) {
     return { error: 'The key used for signing does not match the address provided!' };
+  }
+
+  if (signed_address_hex !== undefined && !header_addresses.includes(signed_address_hex)) {
+    return { error: 'The signed address does not match the address provided!' };
   }
 
   return verification_key.verify(Buffer.from(signed_payload_hex, 'hex'), ed_sig);
