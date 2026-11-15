@@ -71,7 +71,7 @@ export interface DrepInfo {
   drep_id: string;
   hex: string;
   has_script: boolean;
-  registered: boolean;
+  drep_status: 'registered' | 'deregistered' | 'not_registered';
   deposit: string;
   active: boolean;
   expires_epoch_no: number;
@@ -200,7 +200,7 @@ function coerceMetadataString(v: unknown): string | undefined {
 /**
  * Priority-ordered readers for the name field on a DRep metadata document.
  *
- * Order reflects mainnet frequency (see `.claude/trds/SHARED_FETCH_DREP_NAME_ROBUSTNESS.md`):
+ * Order reflects mainnet frequency:
  * `body.dRepName` and `body.givenName` cover ~95% of registrations, with
  * `body.familyName`, `body.name`, and top-level `name` as CIP-119 / pool-style
  * fallbacks for outliers.
@@ -269,8 +269,12 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
 /**
  * Validates that a DRep ID is registered.
  *
+ * Providers can return a row for a DRep that is deregistered or was never
+ * registered, so a returned row must report `registered`.
+ *
  * @param drepId - The DRep ID in bech32 format.
- * @returns `true` if the DRep is registered, `false` if it is not.
+ * @returns `true` if the DRep is registered, `false` if it is deregistered,
+ *   never registered or unknown.
  * @throws {@link ProviderError} if the provider is unreachable or errors. A
  *   DRep is only reported unregistered on an answer we actually received.
  *
@@ -282,7 +286,7 @@ export async function fetchDrepName(drepId: string): Promise<string | undefined 
 export async function validateDrep(drepId: string): Promise<boolean> {
   const { primary, secondary } = getProviders();
   const data = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
-  return data.length > 0;
+  return data.some((row) => row.drep_status === 'registered');
 }
 
 /**
@@ -369,7 +373,7 @@ export async function fetchPoolTicker(poolBech32: string): Promise<string | null
 /**
  * Tight per-call timeout for the off-chain recovery fetch in {@link fetchPoolMetadata}.
  *
- * Kept short on purpose: a mainnet survey (see `.claude/pools-mainnet-survey.json`)
+ * Kept short on purpose: a mainnet survey
  * found that ~26% of all live pool lookups hit this path, and ~87% of those URLs
  * are dead, parked, or return HTML — Koios already exhausted its retries before
  * surfacing `meta_json: null` to us. A 3s ceiling keeps the worst-case

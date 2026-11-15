@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { canonicalize, canonicalBytes } from './canonicalize.js';
 
 /**
- * Backend's current `helper/canonicalJson.js`, lifted verbatim (TRD §3) as the
+ * Backend's current `helper/canonicalJson.js`, lifted verbatim as the
  * cross-repo byte target. Used by the differential test below to prove our
  * implementation is byte-for-byte identical for every valid-JSON input — the
  * single most important property of this module (already-issued hashes must not
@@ -25,7 +25,7 @@ function backendCanonicalize(value: unknown): string {
 }
 
 describe('canonicalize', () => {
-  describe('golden vectors (frozen cross-repo contract — TRD §6)', () => {
+  describe('golden vectors (frozen cross-repo contract)', () => {
     const vectors: Array<[string, unknown, string]> = [
       ['sorts object keys', { b: 1, a: 2 }, '{"a":2,"b":1}'],
       ['keeps array order inside object', { a: 1, b: [3, 1, 2] }, '{"a":1,"b":[3,1,2]}'],
@@ -48,7 +48,7 @@ describe('canonicalize', () => {
     });
   });
 
-  it('is independent of key insertion order (F-006 / P65 scenario)', () => {
+  it('is independent of key insertion order', () => {
     const a: Record<string, unknown> = {};
     a.specVersion = '1.0';
     a.ekklesia = { voterId: 'v1', credentialHrp: 'drep' };

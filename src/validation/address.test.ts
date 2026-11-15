@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { bech32 } from 'bech32';
 
 import { validateAddress, pubKeyToBech32, getAddressType, extractParts } from './address.js';
 
@@ -204,6 +205,39 @@ describe('validateAddress — DRep IDs', () => {
       isScript: true,
     });
   });
+
+  it.each([
+    ['CIP-129 key, 40 bytes', 'drep', '22' + 'dbb7'.repeat(20)],
+    ['CIP-129 script, 40 bytes', 'drep', '23' + 'dbb7'.repeat(20)],
+    ['CIP-105 key, 27 bytes', 'drep', 'dbb7'.repeat(13) + 'db'],
+    ['CIP-105 script, 27 bytes', 'drep_script', 'dbb7'.repeat(13) + 'db'],
+    ['CIP-105 script, 29 bytes with header 23', 'drep_script', '23' + 'dbb7'.repeat(14)],
+    ['CIP-105 script, 29 bytes with header 00', 'drep_script', '00' + 'dbb7'.repeat(14)],
+  ])('rejects a DRep credential that is not 28 bytes (%s)', (_label, prefix, body) => {
+    const drep_id = bech32.encode(prefix, bech32.toWords(Buffer.from(body, 'hex')), 256);
+    const error = { error: 'DRep credential must be 28 bytes' };
+    expect(getAddressType(drep_id)).toEqual(error);
+    expect(validateAddress(drep_id, 'drep')).toEqual(error);
+  });
+});
+
+describe('validateAddress — pool IDs', () => {
+  const pool_id = 'pool1v4a76mt3fqhg64qja6r2rk8d65g0h7a3qjd9ykay3wqvy2h9cff';
+  const pool_hash = '657bed6d71482e8d5412ee86a1d8edd510fbfbb1049a525ba48b80c2';
+
+  it('validates a pool ID', () => {
+    expect(validateAddress(pool_id, 'pool')).toBe(pool_id);
+  });
+
+  it.each([
+    ['29 bytes with header 00', '00' + pool_hash],
+    ['29 bytes with header 22', '22' + pool_hash],
+    ['27 bytes', pool_hash.slice(2)],
+  ])('rejects a pool ID that is not 28 bytes (%s)', (_label, body) => {
+    const id = bech32.encode('pool', bech32.toWords(Buffer.from(body, 'hex')), 256);
+    expect(getAddressType(id)).toEqual({ error: 'Pool ID must be 28 bytes' });
+    expect(validateAddress(id, 'pool')).toEqual({ error: 'Invalid pool ID' });
+  });
 });
 
 describe('pubKeyToBech32', () => {
@@ -225,35 +259,128 @@ describe('pubKeyToBech32', () => {
 describe('getAddressType', () => {
   it('identifies stake key address', () => {
     const result = getAddressType(mainnet_stake_key_addr);
-    expect(result).toEqual({ type: 'stake', keyHash: expect.any(String), hashType: 'key' });
+    expect(result).toEqual({
+      type: 'stake',
+      keyHash: expect.any(String),
+      hashType: 'key',
+      networkId: 1,
+    });
   });
 
   it('identifies stake script address', () => {
     const result = getAddressType(mainnet_stake_script_addr);
-    expect(result).toEqual({ type: 'stake', keyHash: expect.any(String), hashType: 'script' });
+    expect(result).toEqual({
+      type: 'stake',
+      keyHash: expect.any(String),
+      hashType: 'script',
+      networkId: 1,
+    });
   });
 
   it('identifies drep key address', () => {
     const drep_id = 'drep1ytwmwvtd0a8lr45ssner2tjxzv5y8q03w3606yeald9mdmgmwecja';
     const result = getAddressType(drep_id);
-    expect(result).toEqual({ type: 'drep', keyHash: expect.any(String), hashType: 'key' });
+    expect(result).toEqual({
+      type: 'drep',
+      keyHash: expect.any(String),
+      hashType: 'key',
+      networkId: null,
+    });
   });
 
   it('identifies drep script address', () => {
     const drep_id = 'drep_script1rxdd99vu338y659qfg8nmpemdyhlsmaudgv4m4zdz7m5vz8uzt6';
     const result = getAddressType(drep_id);
-    expect(result).toEqual({ type: 'drep', keyHash: expect.any(String), hashType: 'script' });
+    expect(result).toEqual({
+      type: 'drep',
+      keyHash: expect.any(String),
+      hashType: 'script',
+      networkId: null,
+    });
   });
 
   it('identifies pool address', () => {
     const pool_id = 'pool1v4a76mt3fqhg64qja6r2rk8d65g0h7a3qjd9ykay3wqvy2h9cff';
     const result = getAddressType(pool_id);
-    expect(result).toEqual({ type: 'pool', keyHash: expect.any(String), hashType: 'key' });
+    expect(result).toEqual({
+      type: 'pool',
+      keyHash: expect.any(String),
+      hashType: 'key',
+      networkId: null,
+    });
   });
 
   it('returns error for invalid input', () => {
     const result = getAddressType('not_a_bech32_address');
     expect(result).toEqual({ error: 'Not a valid bech32 address' });
+  });
+});
+
+describe('getAddressType — calidus and stake payload length', () => {
+  const hash = 'dbb7'.repeat(14);
+  const encode = (prefix: string, body: string): string =>
+    bech32.encode(prefix, bech32.toWords(Buffer.from(body, 'hex')), 256);
+
+  it.each([
+    ['a1 key', 'calidus', 'a1', 'key'],
+    ['a2 script', 'calidus', 'a2', 'script'],
+    ['e1 key', 'stake', 'e1', 'key'],
+    ['f1 script', 'stake', 'f1', 'script'],
+    ['e0 key', 'stake_test', 'e0', 'key'],
+  ])('accepts a 29-byte ID with header %s', (_label, prefix, header, hashType) => {
+    const type = prefix === 'calidus' ? 'calidus' : 'stake';
+    expect(getAddressType(encode(prefix, header + hash))).toEqual({
+      type,
+      keyHash: hash,
+      hashType,
+      networkId: type === 'calidus' ? null : parseInt(header, 16) & 0x0f,
+    });
+  });
+
+  it.each([
+    ['calidus a1, 30 bytes', 'calidus', 'a1' + hash + 'aa', 'Calidus ID must be 29 bytes'],
+    ['calidus a2, 30 bytes', 'calidus', 'a2' + hash + 'aa', 'Calidus ID must be 29 bytes'],
+    ['calidus a1, 41 bytes', 'calidus', 'a1' + 'dbb7'.repeat(20), 'Calidus ID must be 29 bytes'],
+    ['calidus, 28 bytes', 'calidus', hash, 'Calidus ID must be 29 bytes'],
+    ['stake e1, 30 bytes', 'stake', 'e1' + hash + 'aa', 'Stake address must be 29 bytes'],
+    ['stake f1, 30 bytes', 'stake', 'f1' + hash + 'aa', 'Stake address must be 29 bytes'],
+    ['stake_test e0, 30 bytes', 'stake_test', 'e0' + hash + 'aa', 'Stake address must be 29 bytes'],
+    ['stake, 28 bytes', 'stake', hash, 'Stake address must be 29 bytes'],
+  ])('rejects %s', (_label, prefix, body, error) => {
+    expect(getAddressType(encode(prefix, body))).toEqual({ error });
+  });
+});
+
+describe('getAddressType — networkId', () => {
+  const hash = 'dbb7'.repeat(14);
+  const encode = (prefix: string, body: string): string =>
+    bech32.encode(prefix, bech32.toWords(Buffer.from(body, 'hex')), 256);
+
+  it.each([
+    ['e0', 'stake_test', 'key', 0],
+    ['e1', 'stake', 'key', 1],
+    ['f0', 'stake_test', 'script', 0],
+    ['f1', 'stake', 'script', 1],
+  ])(
+    'returns the network tag of a stake address with header %s',
+    (header, prefix, hashType, networkId) => {
+      expect(getAddressType(encode(prefix, header + hash))).toEqual({
+        type: 'stake',
+        keyHash: hash,
+        hashType,
+        networkId,
+      });
+    },
+  );
+
+  it('returns null for a calidus ID', () => {
+    const result = getAddressType('calidus15yt3nqapz799tvp2lt8adttt29k6xa2xnltahn655tu4sgcph42p7');
+    expect(result).toEqual({
+      type: 'calidus',
+      keyHash: expect.any(String),
+      hashType: 'key',
+      networkId: null,
+    });
   });
 });
 

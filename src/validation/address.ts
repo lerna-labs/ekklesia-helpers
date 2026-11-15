@@ -49,6 +49,8 @@ export interface AddressTypeInfo {
   type: string;
   keyHash: string;
   hashType: string;
+  /** Network tag from the stake address header (0 testnet, 1 mainnet); `null` for IDs that carry none. */
+  networkId: number | null;
 }
 
 /**
@@ -183,11 +185,14 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
       };
     }
 
-    case 'pool': {
-      const key_hash = Ed25519KeyHash.from_hex(words_hex);
-      Credential.from_keyhash(key_hash);
+    case 'pool':
+      try {
+        const key_hash = Ed25519KeyHash.from_hex(words_hex);
+        Credential.from_keyhash(key_hash);
+      } catch (_error) {
+        return { error: 'Invalid pool ID' };
+      }
       break;
-    }
 
     case 'calidus':
       try {
@@ -231,7 +236,7 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
 }
 
 /**
- * Extract the type, key hash, and hash type from a bech32-encoded Cardano address.
+ * Extract the type, key hash, hash type, and network from a bech32-encoded Cardano address.
  *
  * @param bech32Address - A bech32-encoded Cardano address.
  * @returns The decoded address type info, or an error.
@@ -242,6 +247,7 @@ export function validateAddress(signerAddress: string, signType?: string): Valid
  * if (!("error" in info)) {
  *   console.log(info.type);     // "stake"
  *   console.log(info.hashType); // "key"
+ *   console.log(info.networkId); // 1 (mainnet)
  * }
  * ```
  */
@@ -249,6 +255,7 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
   try {
     const { prefix, words } = bech32.decode(bech32Address, 256);
     const body_hex = Buffer.from(bech32.fromWords(words)).toString('hex');
+    let networkId: number | null = null;
     let type: string | undefined, keyHash: string, hashType: string | undefined, keyPrefix: string;
 
     if (body_hex.length > 56) {
@@ -262,10 +269,14 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
 
     switch (prefix) {
       case 'pool':
+        // A pool ID is the bare 28-byte key hash, with no header byte.
+        if (body_hex.length !== 56) return { error: 'Pool ID must be 28 bytes' };
         hashType = 'key';
         type = 'pool';
         break;
       case 'calidus':
+        // A Calidus ID is one header byte followed by a 28-byte hash.
+        if (body_hex.length !== 58) return { error: 'Calidus ID must be 29 bytes' };
         switch (keyPrefix) {
           case 'a1':
             hashType = 'key';
@@ -277,10 +288,13 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
         type = 'calidus';
         break;
       case 'drep_script':
+        // A drep_script ID is the bare 28-byte script hash, with no header byte.
+        if (body_hex.length !== 56) return { error: 'DRep credential must be 28 bytes' };
         hashType = 'script';
         keyPrefix = '23';
       // falls through
       case 'drep':
+        if (keyHash.length !== 56) return { error: 'DRep credential must be 28 bytes' };
         switch (keyPrefix) {
           case '22':
             hashType = 'key';
@@ -293,6 +307,8 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
         break;
       case 'stake':
       case 'stake_test':
+        // A stake address is one header byte followed by a 28-byte hash.
+        if (body_hex.length !== 58) return { error: 'Stake address must be 29 bytes' };
         switch (keyPrefix) {
           case 'e0':
           case 'e1':
@@ -303,6 +319,7 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
             hashType = 'script';
             break;
         }
+        networkId = parseInt(keyPrefix, 16) & 0x0f;
         type = 'stake';
         break;
     }
@@ -311,6 +328,7 @@ export function getAddressType(bech32Address: string): AddressTypeInfo | Address
       type: type!.trim(),
       keyHash: keyHash.trim(),
       hashType: hashType!.trim(),
+      networkId,
     };
   } catch (_error) {
     return { error: 'Not a valid bech32 address' };

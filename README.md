@@ -69,7 +69,7 @@ await fetchIdentity('pool1qqqqqdk4zh...');
 | Export            | Description                                                              |
 | ----------------- | ------------------------------------------------------------------------ |
 | `validateAddress` | Validates Cardano addresses (bech32, hex, DRep CIP-105/CIP-129, calidus) |
-| `getAddressType`  | Returns address type, key hash, and hash type from a bech32 address      |
+| `getAddressType`  | Returns type, key hash, hash type, and network of a bech32 address       |
 | `pubKeyToBech32`  | Converts a hex public key to a bech32 address (DRep or calidus)          |
 | `extractParts`    | Extracts header byte and body from a hex-encoded address                 |
 | `sanitizeInput`   | Sanitizes user input (strips HTML tags/entities, preserves URLs)         |
@@ -96,7 +96,7 @@ await fetchIdentity('pool1qqqqqdk4zh...');
 | `getScript`         | Fetches a native script by script hash                             |
 | `fetchCalidusKey`   | Fetches the calidus (pool cold) key for a stake pool               |
 | `fetchDrepName`     | Fetches the on-chain registered name for a DRep                    |
-| `validateDrep`      | Validates a DRep ID and returns its registration status            |
+| `validateDrep`      | Returns true only when the DRep ID is currently registered         |
 | `fetchHandle`       | Resolves the most representative ADA Handle for an address         |
 | `fetchHandles`      | Resolves every ADA Handle held by an address, in a stable order    |
 | `fetchTxInfo`       | Fetches detailed transaction info                                  |
@@ -285,4 +285,4 @@ git tag -s vX.Y.Z -m "vX.Y.Z" <version-commit-sha>
 git push origin vX.Y.Z
 ```
 
-The tag push runs `publish.yml`. Its first job runs `.github/scripts/verify-release-tag.sh`, and nothing publishes unless the tag is an annotated tag object, GitHub reports its signature as verified, the tagged commit is an ancestor of `origin/main`, and the tag is `v` followed by the `package.json` version at the tagged commit. The publish job then builds, publishes to npm with provenance, and creates the GitHub Release with the `CHANGELOG.md` section as notes. Release candidates still publish from `staging` under the `rc` dist-tag.
+The tag push runs `publish.yml`. Its first job runs `.github/scripts/verify-release-tag.sh`, and nothing publishes unless the tag is an annotated tag object, GitHub reports its signature as verified, the signed tag points directly at the pushed commit, that commit is an ancestor of `origin/main`, and the tag is `v` followed by the `package.json` version at that commit. The publish job then builds, publishes to npm with provenance, and creates the GitHub Release with the `CHANGELOG.md` section as notes. Release candidates still publish from `staging` under the `rc` dist-tag.

@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { bech32 } from 'bech32';
+import cbor from 'cbor';
+import { PrivateKey } from '@emurgo/cardano-serialization-lib-nodejs';
 
 import {
   verifySignature,
@@ -24,6 +27,7 @@ import {
   cip8_signing_drep_key,
   basic_signing_pool_key,
   cip8_signing_pool_key,
+  valid_calidus_payload,
 } from '../__fixtures__/signatures.js';
 
 import { ms, std_signatures, cose_signatures } from '../__fixtures__/scripts.js';
@@ -37,6 +41,51 @@ const { getScript, fetchCalidusKey } = (await import('../cardano/cardanoApi.js')
   getScript: ReturnType<typeof vi.fn>;
   fetchCalidusKey: ReturnType<typeof vi.fn>;
 };
+
+const key_mismatch = { error: 'The key used for signing does not match the address provided!' };
+const calidus_id = 'calidus158zrg2ctr0apt3d6gw3lh20ddtx0yt9qqcu0npnpmapntjgwyf5uy';
+const calidus_key = {
+  calidus_pub_key: '8afb6bfa5d87d5a798a4d794a2f7921c8857e6c386704ef6bea6ad84ef153aa6',
+};
+
+// Re-encodes an address with 12 zero bytes appended to its body.
+function withTrailingBytes(address: string): string {
+  const { prefix, words } = bech32.decode(address, 256);
+  const body = Buffer.concat([Buffer.from(bech32.fromWords(words)), Buffer.alloc(12)]);
+  return bech32.encode(prefix, bech32.toWords(body), 256);
+}
+
+function toBech32(prefix: string, hex: string): string {
+  return bech32.encode(prefix, bech32.toWords(Buffer.from(hex, 'hex')), 256);
+}
+
+// Signs the payload as a COSE_Sign1 whose protected address header is `address_hex`.
+function coseSign(
+  key: PrivateKey,
+  address_hex: string,
+  payload_hex = generic_payload,
+): { COSE_Sign1_hex: string; COSE_Key_hex: string } {
+  const header = new Map<number | string, unknown>([
+    [1, -8],
+    ['address', Buffer.from(address_hex, 'hex')],
+  ]);
+  const protected_header = cbor.encode(header);
+  const payload = Buffer.from(payload_hex, 'hex');
+  const sig_structure = cbor.encode(['Signature1', protected_header, Buffer.alloc(0), payload]);
+  const signature = Buffer.from(key.sign(sig_structure).to_bytes());
+  const cose_key = new Map<number, unknown>([
+    [1, 1],
+    [3, -8],
+    [-1, 6],
+    [-2, Buffer.from(key.to_public().as_bytes())],
+  ]);
+  return {
+    COSE_Sign1_hex: cbor
+      .encode([protected_header, new Map([['hashed', false]]), payload, signature])
+      .toString('hex'),
+    COSE_Key_hex: cbor.encode(cose_key).toString('hex'),
+  };
+}
 
 describe('verifySignature', () => {
   const ORIGINAL_ENV = process.env;
@@ -168,6 +217,128 @@ describe('verifySignature', () => {
       expect(await verifySignature(generic_payload, mainnet_pool_id, cip8_signing_pool_key)).toBe(
         true,
       );
+    });
+
+    it('validates pool signature from its registered calidus key', async () => {
+      fetchCalidusKey.mockResolvedValueOnce(calidus_key);
+      expect(
+        await verifySignature(
+          valid_calidus_payload.payload,
+          valid_calidus_payload.pool_id,
+          valid_calidus_payload,
+        ),
+      ).toBe(true);
+    });
+
+    it('rejects the pool key once a calidus key is registered', async () => {
+      fetchCalidusKey.mockResolvedValueOnce(calidus_key);
+      expect(
+        await verifySignature(generic_payload, mainnet_pool_id, basic_signing_pool_key),
+      ).toEqual(key_mismatch);
+    });
+  });
+
+  describe('calidus signatures', () => {
+    it('validates calidus ID signed by its key', async () => {
+      expect(
+        await verifySignature(valid_calidus_payload.payload, calidus_id, valid_calidus_payload),
+      ).toBe(true);
+    });
+  });
+
+  describe('address binding', () => {
+    it.each([
+      ['mainnet stake', mainnet_stake_address, basic_signing_drep_key],
+      ['testnet stake', testnet_stake_address, basic_signing_drep_key],
+      ['CIP-105 DRep', mainnet_cip105_drep_id, basic_signing_stake_key],
+      ['pool', mainnet_pool_id, basic_signing_drep_key],
+      ['calidus', calidus_id, basic_signing_stake_key],
+    ])('rejects a signature from another key for a %s address', async (_label, address, key) => {
+      fetchCalidusKey.mockResolvedValueOnce(null);
+      expect(await verifySignature(generic_payload, address, key)).toEqual(key_mismatch);
+    });
+
+    it("rejects a DRep ID whose credential contains the signer's key hash", async () => {
+      const drep_id = withTrailingBytes(mainnet_cip129_drep_id);
+      expect(await verifySignature(generic_payload, drep_id, basic_signing_drep_key)).toEqual({
+        error: 'DRep credential must be 28 bytes',
+      });
+    });
+
+    it("rejects a stake address whose payload contains the signer's key hash", async () => {
+      const stake_address = withTrailingBytes(mainnet_stake_address);
+      expect(
+        await verifySignature(generic_payload, stake_address, basic_signing_stake_key),
+      ).toEqual({ error: 'Stake address must be 29 bytes' });
+    });
+  });
+
+  describe('protected address header', () => {
+    const address_mismatch = { error: 'The signed address does not match the address provided!' };
+    const key = PrivateKey.generate_ed25519();
+    const key_hash = key.to_public().hash().to_hex();
+    const other_hash = PrivateKey.generate_ed25519().to_public().hash().to_hex();
+    const stake_address = toBech32('stake', 'e1' + key_hash);
+    const drep_id = toBech32('drep', '22' + key_hash);
+
+    it('accepts a header naming the claimed stake address', async () => {
+      expect(
+        await verifySignature(generic_payload, stake_address, coseSign(key, 'e1' + key_hash)),
+      ).toBe(true);
+    });
+
+    it('rejects a header naming another address with the same key', async () => {
+      expect(
+        await verifySignature(generic_payload, stake_address, coseSign(key, '61' + key_hash)),
+      ).toEqual(address_mismatch);
+    });
+
+    it('rejects a header naming the claimed stake address on the other network', async () => {
+      expect(
+        await verifySignature(generic_payload, testnet_stake_address, cip30_signing_stake_key),
+      ).toEqual(address_mismatch);
+    });
+
+    it.each([
+      ['the bare key hash', key_hash],
+      ['the CIP-129 ID', '22' + key_hash],
+      ['a mainnet type 6 address', '61' + key_hash],
+      ['a testnet type 6 address', '60' + key_hash],
+    ])('accepts a DRep header naming %s', async (_label, header) => {
+      expect(await verifySignature(generic_payload, drep_id, coseSign(key, header))).toBe(true);
+    });
+
+    it.each([
+      ['the bare key hash of another key', other_hash],
+      ['a type 6 address of another key', '61' + other_hash],
+      ['a stake address of the same key', 'e1' + key_hash],
+    ])('rejects a DRep header naming %s', async (_label, header) => {
+      expect(await verifySignature(generic_payload, drep_id, coseSign(key, header))).toEqual(
+        address_mismatch,
+      );
+    });
+
+    it('accepts a header naming the pool ID when signed with its calidus key', async () => {
+      fetchCalidusKey.mockResolvedValueOnce({ calidus_pub_key: key.to_public().to_hex() });
+      const pool_hex = Buffer.from(bech32.fromWords(bech32.decode(mainnet_pool_id).words));
+      expect(
+        await verifySignature(
+          generic_payload,
+          mainnet_pool_id,
+          coseSign(key, pool_hex.toString('hex')),
+        ),
+      ).toBe(true);
+    });
+
+    it('rejects a header naming another pool', async () => {
+      fetchCalidusKey.mockResolvedValueOnce(null);
+      expect(
+        await verifySignature(
+          generic_payload,
+          toBech32('pool', key_hash),
+          coseSign(key, other_hash),
+        ),
+      ).toEqual(address_mismatch);
     });
   });
 });

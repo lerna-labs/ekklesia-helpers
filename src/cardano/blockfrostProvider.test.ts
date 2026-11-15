@@ -96,3 +96,78 @@ describe('BlockfrostProvider request resilience', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('BlockfrostProvider fetchDrepInfo', () => {
+  const mockFetch = vi.fn();
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    mockFetch.mockReset();
+  });
+
+  it('reports a DRep that has not retired as registered', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          drep_id: 'drep1abc',
+          hex: 'aa',
+          amount: '0',
+          has_script: false,
+          retired: false,
+          expired: true,
+          last_active_epoch: 5,
+        }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 404 });
+    const [info] = await new BlockfrostProvider(config()).fetchDrepInfo(['drep1abc']);
+    expect(info.drep_status).toBe('registered');
+    expect(info.active).toBe(false);
+  });
+
+  it('reports a row with no last_active_epoch as not_registered', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          drep_id: 'drep1abc',
+          hex: 'aa',
+          amount: '0',
+          has_script: false,
+          retired: false,
+          expired: false,
+          last_active_epoch: null,
+        }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 404 });
+    const [info] = await new BlockfrostProvider(config()).fetchDrepInfo(['drep1abc']);
+    expect(info.drep_status).toBe('not_registered');
+    expect(info.active).toBe(true);
+  });
+
+  it('reports a predefined DRep with no last_active_epoch as registered', async () => {
+    mockFetch
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          drep_id: 'drep_always_abstain',
+          hex: 'aa',
+          amount: '0',
+          has_script: false,
+          retired: false,
+          expired: true,
+          last_active_epoch: null,
+        }),
+      })
+      .mockResolvedValueOnce({ ok: false, status: 404 });
+    const [info] = await new BlockfrostProvider(config()).fetchDrepInfo(['drep_always_abstain']);
+    expect(info.drep_status).toBe('registered');
+  });
+});
