@@ -1,5 +1,27 @@
 # @lerna-labs/ekklesia-helpers
 
+## 2.1.0
+
+### Minor Changes
+
+- 7c969c7: `getAddressType` now returns `networkId`, typed `number | null` on `AddressTypeInfo`. For a `stake` or `stake_test` address it is the low four bits of the header byte (0 for a testnet, 1 for mainnet, per CIP-0019 "Network Tag"). For `drep`, `drep_script`, `pool` and `calidus` IDs, which carry no network, it is `null`.
+
+### Patch Changes
+
+- 40de028: Refresh `brace-expansion` in `package-lock.json` to 1.1.21 and 5.0.12, closing the denial-of-service advisories in earlier releases. All three copies are development-only dependencies of the lint and documentation toolchain, so this has no effect on consumers of the published package.
+- 1f501b0: `getAddressType` now rejects a `calidus`, `stake` or `stake_test` ID whose payload is not exactly 29 bytes (one header byte and a 28-byte hash), returning `{ error: 'Calidus ID must be 29 bytes' }` or `{ error: 'Stake address must be 29 bytes' }`. It previously accepted a longer payload and returned every byte after the header as the key hash, so the key hash could be longer than 28 bytes. A 28-byte payload was already rejected, now with these messages in place of `{ error: 'Not a valid bech32 address' }`.
+- b83b965: Remove references to unpublished documents from code comments
+
+  Two comments in the compiled `cardanoApi` output pointed readers at documents that are not published with the package. The comments now stand on their own. Behavior is unchanged.
+
+- 5827928: Refresh the development-only `markdown-it`, `vite` and `vitest` lockfile entries to 14.3.3, 8.3.5 and 4.1.12, closing the advisories in earlier releases. All three are dependencies of the documentation and test toolchain, so this has no effect on consumers of the published package.
+- e553435: `getAddressType` now rejects a `pool` or `drep_script` ID whose payload is not exactly 28 bytes, returning `{ error: 'Pool ID must be 28 bytes' }` or `{ error: 'DRep credential must be 28 bytes' }`. It previously accepted a 29-byte payload whatever its first byte and returned the last 28 bytes as the key hash, so it accepted 256 other IDs for every pool and every script DRep. It also accepted a `pool` payload of any other length. `validateAddress` with `drep` rejects the same `drep_script` IDs through it. `validateAddress` with `pool` now returns `{ error: 'Invalid pool ID' }` for a payload that is not 28 bytes, where it previously threw.
+- b90e2d7: Raise the declared `mongoose` dependency to `^9.11.4`, the first release that fixes GHSA-gg4r-jv3p-qx3c, GHSA-8332-j7wj-wjw4, GHSA-6972-9mcm-vhwj and GHSA-wr5m-5jph-8m96 in mongoose 9.0.0 up to 9.11.3.
+- 85ebc41: Refresh the development-only `source-map-js` lockfile entry to 1.2.2 (GHSA-68fv-2mgg-jv7q).
+- a52587b: `validateDrep` now returns `true` only when the provider returns a row whose `drep_status` is `registered`. It previously returned `true` for any returned row, so a deregistered DRep, or a DRep ID that had only ever received a delegation, passed. `active` does not affect the result. The `DrepInfo` type replaces the `registered` boolean with `drep_status` (`registered`, `deregistered` or `not_registered`), which is what Koios `/drep_info` returns since v1.4.0. The Blockfrost provider reports a row with a null `last_active_epoch` as `not_registered`, except `drep_always_abstain` and `drep_always_no_confidence`, which stay `registered`.
+- d65c012: `verifySignature` now rejects a COSE signature whose protected `address` header does not name the claimed address, returning `{ error: 'The signed address does not match the address provided!' }`. It previously checked only that the signing key's hash matched the address's credential, so it accepted a signature made for one address as valid for another address carrying the same key hash, such as the same stake address on the other network. For a DRep, the header may instead name the DRep key hash, its CIP-129 ID, or a type 6 address carrying the key hash on either network. For a pool signed with its calidus key, it may name the pool ID or the calidus ID. Plain Ed25519 signatures carry no header and are unaffected.
+- 276f119: `verifySignature` now requires the signing key's hash to equal the address's credential, or, for a pool with a registered calidus key, that key's hash. It previously checked only that the credential contained that hash, so it accepted a signature for a crafted DRep ID whose credential was longer than 28 bytes and held the signer's key hash. `getAddressType` and `validateAddress` now reject a DRep ID whose key or script credential is not exactly 28 bytes, returning `{ error: 'DRep credential must be 28 bytes' }`.
+
 ## 2.0.4
 
 ### Patch Changes
