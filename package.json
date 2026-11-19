@@ -48,7 +48,7 @@
     "docs": "typedoc",
     "docs:serve": "typedoc && npx serve docs",
     "changeset": "changeset",
-    "changeset:version": "changeset version",
+    "changeset:version": "changeset version && npm install --package-lock-only",
     "changeset:snapshot": "changeset version --snapshot rc"
   },
   "publishConfig": {
