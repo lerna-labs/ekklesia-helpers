@@ -1,0 +1,43 @@
+/**
+ * Network-specific signature vectors for stake addresses.
+ *
+ * Each network has its own throwaway Ed25519 key, generated for these fixtures
+ * only; the private keys were discarded. Every vector signs `network_payload`:
+ * `basic` is a raw Ed25519 signature over its bytes, and `cose` is a CIP-8/CIP-30
+ * COSE_Sign1 whose protected header names the stake address.
+ */
+
+export const network_payload =
+  '656b6b6c657369612d68656c706572732063736c2066697874757265207061796c6f6164207631';
+export const network_tampered_payload =
+  '656b6b6c657369612d68656c706572732063736c2066697874757265207061796c6f6164207632';
+
+export const mainnet_vector = {
+  address: 'stake1uyx0ue3xurj2tdss6nxz62zjh8nccd2y8j9p4r5lxvfta7cpnvjsy',
+  basic: {
+    signature:
+      'c15024e2bda7f9ce5e83069d71c03905fdb407a59d8a65f2458d67456f51aabc4770ba5e72010cb403bbda0733a71ec147156b2fc59647c34b67aa331c47400f',
+    publicKey: '0752c041f4820f6e874a4b35546dbed60f9d333d2cbd298f7d7bed0593bfa650',
+  },
+  cose: {
+    COSE_Sign1_hex:
+      '84582aa201276761646472657373581de10cfe6626e0e4a5b610d4cc2d2852b9e78c35443c8a1a8e9f3312befba166686173686564f45827656b6b6c657369612d68656c706572732063736c2066697874757265207061796c6f61642076315840660630001820bd5dfc11499e683c81c015cc7e2e4475ac1a14f02e4164120c15120a850f2bde0bd8dd2261a9da3b7aa98248a8e35d5b3041322c07506782eb07',
+    COSE_Key_hex:
+      'a40101032720062158200752c041f4820f6e874a4b35546dbed60f9d333d2cbd298f7d7bed0593bfa650',
+  },
+};
+
+export const testnet_vector = {
+  address: 'stake_test1uqvr0qec57md6pvupnp5ywnx2rs8x254yxe7pv2uwzgz28cumn93r',
+  basic: {
+    signature:
+      'c692298739f43cabf07b7e447da640480a6407e781a93bd190f82562ff8d425635dfd859b57d7d946e1d808b6cf2ed6ebff4dd60c994b29e504c223b30c9680b',
+    publicKey: 'c0b0074da665f7bbb08e7634c153218cd777b582544b2e4d4dad6c1d22f10f32',
+  },
+  cose: {
+    COSE_Sign1_hex:
+      '84582aa201276761646472657373581de018378338a7b6dd059c0cc3423a6650e0732a9521b3e0b15c7090251fa166686173686564f45827656b6b6c657369612d68656c706572732063736c2066697874757265207061796c6f61642076315840dbb32977fc7433fcc5a3903c4ef1c7288e8a0bd3d28e4c730c0dd29252a8d3e5315b8bab9d8e989a87bc89d986ca95fa81dff5f0a6827b3561df591a7f1b370e',
+    COSE_Key_hex:
+      'a4010103272006215820c0b0074da665f7bbb08e7634c153218cd777b582544b2e4d4dad6c1d22f10f32',
+  },
+};
