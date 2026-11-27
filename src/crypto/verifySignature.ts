@@ -125,8 +125,8 @@ function standardize_signature(signature: SignatureObject): SignatureObject {
         signature.signature = Buffer.from(
           bech32.fromWords(bech32.decode(signature.signature, 128).words),
         ).toString('hex');
-      } catch (_error) {
-        throw new Error('Signature is invalid');
+      } catch (error) {
+        throw new Error('Signature is invalid', { cause: error });
       }
     }
   }
@@ -219,15 +219,15 @@ function get_key_signature_and_payload(signature: SignatureObject, payload: stri
   let verification_key: InstanceType<typeof PublicKey>;
   try {
     verification_key = PublicKey.from_hex(public_key_hex);
-  } catch (_error) {
-    throw new Error('Invalid signature key');
+  } catch (error) {
+    throw new Error('Invalid signature key', { cause: error });
   }
 
   let ed_sig: InstanceType<typeof Ed25519Signature>;
   try {
     ed_sig = Ed25519Signature.from_hex(ed_signature_hex);
-  } catch (_error) {
-    throw new Error('Invalid signature');
+  } catch (error) {
+    throw new Error('Invalid signature', { cause: error });
   }
 
   return { verification_key, ed_sig, signed_payload_hex, signed_address_hex };

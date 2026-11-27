@@ -151,8 +151,8 @@ export function resetProviders(): void {
 export async function getScript(scriptHash: string): Promise<Record<string, unknown> | false> {
   try {
     ScriptHash.from_hex(scriptHash);
-  } catch (_error) {
-    throw new Error('Not a valid script hash');
+  } catch (error) {
+    throw new Error('Not a valid script hash', { cause: error });
   }
 
   const { primary, secondary } = getProviders();
