@@ -357,7 +357,6 @@ export function pubKeyToBech32(
   prefix: string = 'drep',
   script: boolean = false,
 ): string | DrepAddressResult {
-  let bech32id: string | false = false;
   let pubkey, keyhash, key_hex: string, credential;
 
   switch (prefix) {
@@ -449,7 +448,7 @@ export function pubKeyToBech32(
       throw new Error(`Unsupported prefix: ${prefix}`);
   }
 
-  bech32id = bech32.encode(prefix, bech32.toWords(Buffer.from(key_hex!, 'hex')), 256);
+  const bech32id = bech32.encode(prefix, bech32.toWords(Buffer.from(key_hex!, 'hex')), 256);
   return bech32id;
 }
 

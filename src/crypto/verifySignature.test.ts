@@ -30,6 +30,13 @@ import {
   valid_calidus_payload,
 } from '../__fixtures__/signatures.js';
 
+import {
+  network_payload,
+  network_tampered_payload,
+  mainnet_vector,
+  testnet_vector,
+} from '../__fixtures__/networkSignatures.js';
+
 import { ms, std_signatures, cose_signatures } from '../__fixtures__/scripts.js';
 
 vi.mock('../cardano/cardanoApi.js', () => ({
@@ -270,6 +277,43 @@ describe('verifySignature', () => {
       expect(
         await verifySignature(generic_payload, stake_address, basic_signing_stake_key),
       ).toEqual({ error: 'Stake address must be 29 bytes' });
+    });
+  });
+
+  describe('network fixtures', () => {
+    const vectors = [
+      ['mainnet', mainnet_vector, testnet_vector],
+      ['testnet', testnet_vector, mainnet_vector],
+    ] as const;
+
+    describe.each(vectors)('%s stake address', (_network, own, other) => {
+      it('validates a basic Ed25519 signature', async () => {
+        expect(await verifySignature(network_payload, own.address, own.basic)).toBe(true);
+      });
+
+      it('validates a COSE signature whose header names the address', async () => {
+        expect(await verifySignature(network_payload, own.address, own.cose)).toBe(true);
+      });
+
+      it('rejects a basic signature over a tampered payload', async () => {
+        expect(await verifySignature(network_tampered_payload, own.address, own.basic)).toBe(false);
+      });
+
+      it('rejects a COSE signature over a tampered payload', async () => {
+        expect(await verifySignature(network_tampered_payload, own.address, own.cose)).toBe(false);
+      });
+
+      it("rejects the other network's basic signature", async () => {
+        expect(await verifySignature(network_payload, own.address, other.basic)).toEqual(
+          key_mismatch,
+        );
+      });
+
+      it("rejects the other network's COSE signature", async () => {
+        expect(await verifySignature(network_payload, own.address, other.cose)).toEqual(
+          key_mismatch,
+        );
+      });
     });
   });
 
