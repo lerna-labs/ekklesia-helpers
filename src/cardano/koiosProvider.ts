@@ -5,7 +5,12 @@
  */
 
 import type { CardanoProvider } from './provider.js';
-import { ProviderError, errorFromResponse, type PoolMetadata } from './provider.js';
+import {
+  ProviderError,
+  errorFromResponse,
+  type PoolMetadata,
+  type PoolStatus,
+} from './provider.js';
 import type { CalidusKey, DrepInfo, TxInfo } from './cardanoApi.js';
 
 /** Configuration for the Koios provider. */
@@ -39,6 +44,13 @@ interface KoiosPoolInfo {
     homepage: string;
     description: string;
   } | null;
+}
+
+/** Koios pool info response fields read for registration state. */
+interface KoiosPoolStatus {
+  pool_id_bech32: string;
+  pool_status: PoolStatus['pool_status'];
+  retiring_epoch: number | null;
 }
 
 /** Per-attempt timeout for a Koios/Handle.me HTTP call. */
@@ -119,6 +131,20 @@ export class KoiosProvider implements CardanoProvider {
     };
   }
 
+  async fetchPoolStatus(poolBech32: string): Promise<PoolStatus | null> {
+    const data = await this.post<KoiosPoolStatus[]>(
+      '/pool_info?select=pool_id_bech32,pool_status,retiring_epoch',
+      { _pool_bech32_ids: [poolBech32] },
+    );
+    const pool = data.find((row) => row.pool_id_bech32 === poolBech32);
+    if (!pool) return null;
+    return {
+      pool_id: pool.pool_id_bech32,
+      pool_status: pool.pool_status,
+      retiring_epoch: pool.retiring_epoch,
+    };
+  }
+
   async fetchDrepInfo(drepIds: string[]): Promise<DrepInfo[]> {
     return this.post<DrepInfo[]>('/drep_info', {
       _drep_ids: drepIds,
@@ -126,7 +152,10 @@ export class KoiosProvider implements CardanoProvider {
   }
 
   async fetchCalidusKey(poolBech32: string): Promise<CalidusKey | null> {
-    const data = await this.get<CalidusKey[]>(`/pool_calidus_keys?pool_id_bech32=eq.${poolBech32}`);
+    // CIP-151, Calidus Key (payload field 7): the active key is the highest-nonce registration.
+    const data = await this.get<CalidusKey[]>(
+      `/pool_calidus_keys?pool_id_bech32=eq.${poolBech32}&order=calidus_nonce.desc&limit=1`,
+    );
     return data.length > 0 ? data[0] : null;
   }
 

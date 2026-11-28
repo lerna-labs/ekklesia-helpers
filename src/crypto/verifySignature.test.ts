@@ -38,15 +38,18 @@ import {
 } from '../__fixtures__/networkSignatures.js';
 
 import { ms, std_signatures, cose_signatures } from '../__fixtures__/scripts.js';
+import { ProviderError } from '../cardano/provider.js';
 
 vi.mock('../cardano/cardanoApi.js', () => ({
   getScript: vi.fn(),
   fetchCalidusKey: vi.fn(),
+  validatePool: vi.fn(),
 }));
 
-const { getScript, fetchCalidusKey } = (await import('../cardano/cardanoApi.js')) as {
+const { getScript, fetchCalidusKey, validatePool } = (await import('../cardano/cardanoApi.js')) as {
   getScript: ReturnType<typeof vi.fn>;
   fetchCalidusKey: ReturnType<typeof vi.fn>;
+  validatePool: ReturnType<typeof vi.fn>;
 };
 
 const key_mismatch = { error: 'The key used for signing does not match the address provided!' };
@@ -101,6 +104,7 @@ describe('verifySignature', () => {
     process.env = { ...ORIGINAL_ENV };
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    validatePool.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -108,6 +112,7 @@ describe('verifySignature', () => {
     vi.restoreAllMocks();
     getScript.mockReset();
     fetchCalidusKey.mockReset();
+    validatePool.mockReset();
   });
 
   describe('input validation', () => {
@@ -212,22 +217,50 @@ describe('verifySignature', () => {
   });
 
   describe('pool signatures', () => {
-    it('validates basic pool signature (no calidus key)', async () => {
-      fetchCalidusKey.mockResolvedValueOnce(null);
+    const not_registered = { error: 'Pool is not registered' };
+    const revoked_key = { calidus_pub_key: '00'.repeat(32) };
+    const record = (key: PrivateKey): { calidus_pub_key: string } => ({
+      calidus_pub_key: key.to_public().to_hex(),
+    });
+    const sign = (key: PrivateKey): { signature: string; publicKey: string } => ({
+      signature: key.sign(Buffer.from(generic_payload, 'hex')).to_hex(),
+      publicKey: key.to_public().to_hex(),
+    });
+    // Throwaway keys: `cold` stands in for a pool cold key, so its hash is the pool ID.
+    const cold = PrivateKey.generate_ed25519();
+    const pool_id = toBech32('pool', cold.to_public().hash().to_hex());
+    const active = PrivateKey.generate_ed25519();
+    const superseded = PrivateKey.generate_ed25519();
+    const other_cold = PrivateKey.generate_ed25519();
+
+    it('accepts the cold key when the pool has no calidus key', async () => {
+      fetchCalidusKey.mockResolvedValue(null);
       expect(await verifySignature(generic_payload, mainnet_pool_id, basic_signing_pool_key)).toBe(
         true,
       );
     });
 
-    it('validates CIP-8 pool signature (no calidus key)', async () => {
-      fetchCalidusKey.mockResolvedValueOnce(null);
+    it('accepts a CIP-8 cold key signature', async () => {
+      fetchCalidusKey.mockResolvedValue(null);
       expect(await verifySignature(generic_payload, mainnet_pool_id, cip8_signing_pool_key)).toBe(
         true,
       );
     });
 
-    it('validates pool signature from its registered calidus key', async () => {
-      fetchCalidusKey.mockResolvedValueOnce(calidus_key);
+    it('accepts the cold key when the pool has a calidus key', async () => {
+      fetchCalidusKey.mockResolvedValue(calidus_key);
+      expect(await verifySignature(generic_payload, mainnet_pool_id, basic_signing_pool_key)).toBe(
+        true,
+      );
+    });
+
+    it('accepts the cold key without looking up a calidus key', async () => {
+      expect(await verifySignature(generic_payload, pool_id, sign(cold))).toBe(true);
+      expect(fetchCalidusKey).not.toHaveBeenCalled();
+    });
+
+    it('accepts the active calidus key', async () => {
+      fetchCalidusKey.mockResolvedValue(calidus_key);
       expect(
         await verifySignature(
           valid_calidus_payload.payload,
@@ -237,11 +270,63 @@ describe('verifySignature', () => {
       ).toBe(true);
     });
 
-    it('rejects the pool key once a calidus key is registered', async () => {
-      fetchCalidusKey.mockResolvedValueOnce(calidus_key);
+    it('rejects a calidus key superseded by a later registration', async () => {
+      fetchCalidusKey.mockResolvedValue(record(active));
+      expect(await verifySignature(generic_payload, pool_id, sign(superseded))).toEqual(
+        key_mismatch,
+      );
+    });
+
+    it('rejects every key once the calidus key is revoked, except the cold key', async () => {
+      fetchCalidusKey.mockResolvedValue(revoked_key);
+      expect(await verifySignature(generic_payload, pool_id, sign(active))).toEqual(key_mismatch);
       expect(
-        await verifySignature(generic_payload, mainnet_pool_id, basic_signing_pool_key),
+        await verifySignature(generic_payload, pool_id, {
+          signature: '00'.repeat(64),
+          publicKey: '00'.repeat(32),
+        }),
       ).toEqual(key_mismatch);
+      expect(await verifySignature(generic_payload, pool_id, sign(cold))).toBe(true);
+    });
+
+    it("rejects another pool's cold key", async () => {
+      fetchCalidusKey.mockResolvedValue(record(active));
+      expect(await verifySignature(generic_payload, pool_id, sign(other_cold))).toEqual(
+        key_mismatch,
+      );
+    });
+
+    it("rejects another pool's calidus key", async () => {
+      fetchCalidusKey.mockResolvedValue(record(active));
+      expect(
+        await verifySignature(valid_calidus_payload.payload, pool_id, valid_calidus_payload),
+      ).toEqual(key_mismatch);
+    });
+
+    it.each([
+      ['cold key', cold],
+      ['calidus key', active],
+    ])('refuses a pool that is not registered, signed with its %s', async (_label, key) => {
+      validatePool.mockResolvedValue(false);
+      fetchCalidusKey.mockResolvedValue(record(active));
+      expect(await verifySignature(generic_payload, pool_id, sign(key))).toEqual(not_registered);
+      expect(validatePool).toHaveBeenCalledWith(pool_id);
+    });
+
+    it('throws ProviderError when the registration lookup fails', async () => {
+      validatePool.mockRejectedValue(new ProviderError('Koios', 'POST /pool_info failed'));
+      await expect(verifySignature(generic_payload, pool_id, sign(cold))).rejects.toThrow(
+        ProviderError,
+      );
+    });
+
+    it('throws ProviderError when the calidus key lookup fails', async () => {
+      fetchCalidusKey.mockRejectedValue(
+        new ProviderError('Koios', 'GET /pool_calidus_keys failed'),
+      );
+      await expect(verifySignature(generic_payload, pool_id, sign(active))).rejects.toThrow(
+        ProviderError,
+      );
     });
   });
 
@@ -372,6 +457,30 @@ describe('verifySignature', () => {
           coseSign(key, pool_hex.toString('hex')),
         ),
       ).toBe(true);
+    });
+
+    it('accepts a header naming the calidus ID when signed with its calidus key', async () => {
+      fetchCalidusKey.mockResolvedValueOnce({ calidus_pub_key: key.to_public().to_hex() });
+      expect(
+        await verifySignature(generic_payload, mainnet_pool_id, coseSign(key, 'a1' + key_hash)),
+      ).toBe(true);
+    });
+
+    it('accepts a header naming the pool ID when signed with the cold key', async () => {
+      expect(
+        await verifySignature(generic_payload, toBech32('pool', key_hash), coseSign(key, key_hash)),
+      ).toBe(true);
+    });
+
+    it('rejects a cold key header naming a calidus ID', async () => {
+      fetchCalidusKey.mockResolvedValueOnce({ calidus_pub_key: key.to_public().to_hex() });
+      expect(
+        await verifySignature(
+          generic_payload,
+          toBech32('pool', key_hash),
+          coseSign(key, 'a1' + key_hash),
+        ),
+      ).toEqual(address_mismatch);
     });
 
     it('rejects a header naming another pool', async () => {

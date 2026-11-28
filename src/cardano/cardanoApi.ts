@@ -162,6 +162,9 @@ export async function getScript(scriptHash: string): Promise<Record<string, unkn
 /**
  * Fetches the latest Calidus key for a given stake pool.
  *
+ * A record whose `calidus_pub_key` is all zeros is a revocation (CIP-151,
+ * Calidus Key): the pool then has no active Calidus key.
+ *
  * @param poolBech32 - The pool ID in bech32 format (e.g., `"pool1..."`).
  * @returns The Calidus key record if found, `null` if the pool has none.
  * @throws {@link ProviderError} if the provider is unreachable or errors.
@@ -287,6 +290,29 @@ export async function validateDrep(drepId: string): Promise<boolean> {
   const { primary, secondary } = getProviders();
   const data = await withFallback(primary, secondary, (p) => p.fetchDrepInfo([drepId]));
   return data.some((row) => row.drep_status === 'registered');
+}
+
+/**
+ * Validates that a stake pool is registered.
+ *
+ * A pool stays registered until the epoch its retirement certificate names
+ * begins, so a retiring pool passes and a retired one does not.
+ *
+ * @param poolBech32 - The pool ID in bech32 format (e.g., `"pool1..."`).
+ * @returns `true` if the pool is registered or retiring, `false` if it is
+ *   retired or was never registered.
+ * @throws {@link ProviderError} if the provider is unreachable or errors. A
+ *   pool is only reported unregistered on an answer we actually received.
+ *
+ * @example
+ * ```ts
+ * const registered = await validatePool("pool1abc...");
+ * ```
+ */
+export async function validatePool(poolBech32: string): Promise<boolean> {
+  const { primary, secondary } = getProviders();
+  const status = await withFallback(primary, secondary, (p) => p.fetchPoolStatus(poolBech32));
+  return status?.pool_status === 'registered' || status?.pool_status === 'retiring';
 }
 
 /**

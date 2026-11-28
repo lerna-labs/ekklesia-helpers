@@ -5,6 +5,7 @@ import {
   fetchCalidusKey,
   fetchDrepName,
   validateDrep,
+  validatePool,
   fetchHandle,
   fetchHandles,
   fetchTxInfo,
@@ -95,6 +96,14 @@ describe('cardanoApi', () => {
       });
       const result = await fetchCalidusKey('pool1abc');
       expect(result).toEqual(keyData);
+    });
+
+    it('asks for the highest-nonce registration only', async () => {
+      mockFetch.mockResolvedValueOnce({ json: async () => [] });
+      await fetchCalidusKey('pool1abc');
+      expect(String(mockFetch.mock.calls[0][0])).toMatch(
+        /\/pool_calidus_keys\?pool_id_bech32=eq\.pool1abc&order=calidus_nonce\.desc&limit=1$/,
+      );
     });
 
     it('returns null when no key found', async () => {
@@ -265,6 +274,70 @@ describe('cardanoApi', () => {
     it('throws rather than reporting the DRep unregistered when the provider errors', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Network error'));
       await expect(validateDrep('drep1abc')).rejects.toThrow(ProviderError);
+    });
+  });
+
+  describe('validatePool', () => {
+    const poolId = 'pool1rkfs9glmfva3jd0q9vnlqvuhnrflpzj4l07u6sayfx5k7d788us';
+    const row = (
+      id: string,
+      pool_status: string,
+      retiring_epoch: number | null = null,
+    ): Record<string, unknown> => ({ pool_id_bech32: id, pool_status, retiring_epoch });
+    const answer = (rows: unknown[]): void => {
+      mockFetch.mockResolvedValueOnce({ json: async () => rows });
+    };
+
+    it('returns true when the pool is registered', async () => {
+      answer([row(poolId, 'registered')]);
+      expect(await validatePool(poolId)).toBe(true);
+      expect(String(mockFetch.mock.calls[0][0])).toContain('/pool_info?');
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body)).toEqual({ _pool_bech32_ids: [poolId] });
+    });
+
+    it('returns true when the pool is retiring in a later epoch', async () => {
+      answer([row(poolId, 'retiring', 330)]);
+      expect(await validatePool(poolId)).toBe(true);
+    });
+
+    it('returns false when the pool is retired', async () => {
+      answer([row(poolId, 'retired', 318)]);
+      expect(await validatePool(poolId)).toBe(false);
+    });
+
+    it('returns false when the pool was never registered', async () => {
+      answer([]);
+      expect(await validatePool(poolId)).toBe(false);
+    });
+
+    it('returns false when the only row is for another pool', async () => {
+      answer([row('pool1other', 'registered')]);
+      expect(await validatePool(poolId)).toBe(false);
+    });
+
+    it('throws rather than reporting the pool unregistered when the provider errors', async () => {
+      mockFetch.mockRejectedValueOnce(new Error('Network error'));
+      await expect(validatePool(poolId)).rejects.toThrow(ProviderError);
+    });
+
+    it('throws rather than reporting the pool unregistered when the token is rejected', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 });
+      await expect(validatePool(poolId)).rejects.toThrow(ProviderError);
+    });
+
+    it('answers from Blockfrost when Koios fails', async () => {
+      process.env.BLOCKFROST_URL = 'https://blockfrost.example';
+      process.env.BLOCKFROST_PROJECT_ID = 'test-project';
+      resetProviders();
+      mockFetch.mockResolvedValueOnce({ ok: false, status: 401 }).mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => [{ tx_hash: 'aa', cert_index: 0, action: 'registered' }],
+      });
+      expect(await validatePool(poolId)).toBe(true);
+      expect(String(mockFetch.mock.calls[1][0])).toBe(
+        `https://blockfrost.example/pools/${poolId}/updates?order=desc&count=1`,
+      );
     });
   });
 
