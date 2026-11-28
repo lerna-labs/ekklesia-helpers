@@ -172,6 +172,87 @@ describe('BlockfrostProvider fetchDrepInfo', () => {
   });
 });
 
+describe('BlockfrostProvider fetchPoolStatus', () => {
+  const mockFetch = vi.fn();
+  const poolId = 'pool1zfd0gl76h3f0ammgp4gu0qvt99qcqkn5a895wv0q779d6p9dz5u';
+  const retireTx = 'de2fcc1484ebeb1d8badc1871085fa560524a896b6ce1c5e75401b7fc0dcd838';
+  const ok = (body: unknown): { ok: true; status: 200; json: () => Promise<unknown> } => ({
+    ok: true,
+    status: 200,
+    json: async () => body,
+  });
+  // Routes by path, so the parallel retirement and epoch lookups may arrive in any order.
+  const answer = (routes: Record<string, unknown>): void => {
+    mockFetch.mockImplementation(async (url: string) => {
+      const path = url.replace(config().url, '');
+      if (!(path in routes)) return { ok: false, status: 404 };
+      const body = routes[path];
+      return body instanceof Error ? Promise.reject(body) : ok(body);
+    });
+  };
+  const updates = `/pools/${poolId}/updates?order=desc&count=1`;
+  const retirement = (epoch: number, cert_index = 0): Record<string, unknown> => ({
+    [updates]: [{ tx_hash: retireTx, cert_index, action: 'deregistered' }],
+    [`/txs/${retireTx}/pool_retires`]: [{ cert_index: 0, pool_id: poolId, retiring_epoch: epoch }],
+    '/epochs/latest': { epoch: 670 },
+  });
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', mockFetch);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    mockFetch.mockReset();
+  });
+
+  it('reports a pool whose latest certificate is a registration as registered', async () => {
+    answer({ [updates]: [{ tx_hash: 'aa', cert_index: 0, action: 'registered' }] });
+    expect(await new BlockfrostProvider(config()).fetchPoolStatus(poolId)).toEqual({
+      pool_id: poolId,
+      pool_status: 'registered',
+      retiring_epoch: null,
+    });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a pool retiring in a later epoch as retiring', async () => {
+    answer(retirement(672));
+    expect(await new BlockfrostProvider(config()).fetchPoolStatus(poolId)).toEqual({
+      pool_id: poolId,
+      pool_status: 'retiring',
+      retiring_epoch: 672,
+    });
+  });
+
+  it('reports a pool as retired from the start of its retiring epoch', async () => {
+    answer(retirement(670));
+    expect(await new BlockfrostProvider(config()).fetchPoolStatus(poolId)).toMatchObject({
+      pool_status: 'retired',
+      retiring_epoch: 670,
+    });
+  });
+
+  it('returns null for a pool that was never registered', async () => {
+    answer({});
+    expect(await new BlockfrostProvider(config()).fetchPoolStatus(poolId)).toBeNull();
+  });
+
+  it('throws when the retirement certificate cannot be found', async () => {
+    answer(retirement(672, 1));
+    await expect(new BlockfrostProvider(config()).fetchPoolStatus(poolId)).rejects.toThrow(
+      ProviderError,
+    );
+  });
+
+  it('throws rather than reporting the pool unregistered when the provider errors', async () => {
+    answer({ [updates]: new Error('ECONNRESET') });
+    await expect(new BlockfrostProvider(config()).fetchPoolStatus(poolId)).rejects.toThrow(
+      ProviderError,
+    );
+  });
+});
+
 /**
  * Address vectors from CIP-19, "Test Vectors". All use the same payment key,
  * stake key and script, so each base address maps to the stake address of its

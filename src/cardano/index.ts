@@ -3,6 +3,7 @@ export {
   fetchCalidusKey,
   fetchDrepName,
   validateDrep,
+  validatePool,
   fetchHandle,
   fetchHandles,
   fetchTxInfo,
@@ -22,6 +23,7 @@ export {
 export {
   type CardanoProvider,
   type PoolMetadata,
+  type PoolStatus,
   UnsupportedOperationError,
   ProviderError,
   ProviderAuthError,

@@ -25,6 +25,19 @@ export interface PoolMetadata {
   meta_url: string | null;
 }
 
+/** Registration state of a stake pool. */
+export interface PoolStatus {
+  pool_id: string;
+  /**
+   * `retiring` means a retirement certificate takes effect at the start of
+   * `retiring_epoch`, which has not begun, so the pool is still registered.
+   * `retired` means that epoch has begun.
+   */
+  pool_status: 'registered' | 'retiring' | 'retired';
+  /** Epoch in which the latest retirement takes effect, or `null` if none is pending or effective. */
+  retiring_epoch: number | null;
+}
+
 /** Thrown when a provider does not support a given operation. */
 export class UnsupportedOperationError extends Error {
   constructor(provider: string, operation: string) {
@@ -188,6 +201,9 @@ export interface CardanoProvider {
 
   /** Fetch pool metadata by bech32 pool ID. */
   fetchPoolMetadata(poolBech32: string): Promise<PoolMetadata | null>;
+
+  /** Fetch a pool's registration state by bech32 pool ID; `null` if it was never registered. */
+  fetchPoolStatus(poolBech32: string): Promise<PoolStatus | null>;
 
   /** Fetch DRep info for given DRep IDs. */
   fetchDrepInfo(drepIds: string[]): Promise<DrepInfo[]>;

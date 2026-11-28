@@ -12,6 +12,7 @@ import {
   UnsupportedOperationError,
   errorFromResponse,
   type PoolMetadata,
+  type PoolStatus,
 } from './provider.js';
 import type { CalidusKey, DrepInfo, TxIO, TxInfo } from './cardanoApi.js';
 import { fetchHandleMe, orderHolderHandles } from './koiosProvider.js';
@@ -108,6 +109,25 @@ interface BfPoolMetadata {
   homepage: string | null;
 }
 
+/** Blockfrost /pools/{pool_id}/updates entry. */
+interface BfPoolUpdate {
+  tx_hash: string;
+  cert_index: number;
+  action: 'registered' | 'deregistered';
+}
+
+/** Blockfrost /txs/{hash}/pool_retires entry. */
+interface BfPoolRetire {
+  cert_index: number;
+  pool_id: string;
+  retiring_epoch: number;
+}
+
+/** Blockfrost /epochs/latest response (relevant fields). */
+interface BfEpoch {
+  epoch: number;
+}
+
 /** Blockfrost /governance/dreps/{drep_id} response. */
 interface BfDrep {
   drep_id: string;
@@ -197,6 +217,37 @@ export class BlockfrostProvider implements CardanoProvider {
       description: data.description,
       homepage: data.homepage,
       meta_url: data.url,
+    };
+  }
+
+  async fetchPoolStatus(poolBech32: string): Promise<PoolStatus | null> {
+    // The latest registration or retirement certificate decides the state.
+    const updates = await this.get<BfPoolUpdate[]>(
+      `/pools/${poolBech32}/updates?order=desc&count=1`,
+    );
+    const latest = updates?.[0];
+    if (!latest) return null;
+    if (latest.action === 'registered') {
+      return { pool_id: poolBech32, pool_status: 'registered', retiring_epoch: null };
+    }
+
+    const [retires, epoch] = await Promise.all([
+      this.get<BfPoolRetire[]>(`/txs/${latest.tx_hash}/pool_retires`),
+      this.get<BfEpoch>('/epochs/latest'),
+    ]);
+    const retire = retires?.find(
+      (r) => r.pool_id === poolBech32 && r.cert_index === latest.cert_index,
+    );
+    if (!retire || !epoch) {
+      throw new ProviderError(
+        this.name,
+        `No retirement certificate for ${poolBech32} in ${latest.tx_hash}`,
+      );
+    }
+    return {
+      pool_id: poolBech32,
+      pool_status: retire.retiring_epoch > epoch.epoch ? 'retiring' : 'retired',
+      retiring_epoch: retire.retiring_epoch,
     };
   }
 

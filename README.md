@@ -83,6 +83,25 @@ await fetchIdentity('pool1qqqqqdk4zh...');
 | `getScriptCriteria`        | Extracts required signature criteria from a native script            |
 | `validateScriptSignatures` | Validates multiple signatures against a native script's requirements |
 
+#### Pool sign-in
+
+For a pool ID, `verifySignature` accepts a signature from the pool cold key,
+whose hash is the pool ID, or from the pool's active calidus key (CIP-151). The
+active calidus key is the registration with the highest nonce, and an all-zero
+key revokes it, so after a revocation only the cold key signs for the pool. A
+COSE signature's protected `address` header must name the pool ID, and when the
+calidus key signed it may name the calidus ID instead.
+
+The pool must also be registered. `verifySignature` returns
+`{ error: 'Pool is not registered' }` for a pool that is retired or was never
+registered, whichever key signed. A pool with a pending retirement stays
+registered until the epoch its retirement certificate names begins.
+`validatePool` runs the same check on its own, so a server can refuse a pool
+before asking it to sign.
+
+Both lookups throw `ProviderError` when the provider cannot be reached, so an
+outage never reads as an unregistered pool or a missing key.
+
 ### Auth (`@lerna-labs/ekklesia-helpers/auth`)
 
 | Export        | Description                                              |
@@ -94,9 +113,10 @@ await fetchIdentity('pool1qqqqqdk4zh...');
 | Export              | Description                                                        |
 | ------------------- | ------------------------------------------------------------------ |
 | `getScript`         | Fetches a native script by script hash                             |
-| `fetchCalidusKey`   | Fetches the calidus (pool cold) key for a stake pool               |
+| `fetchCalidusKey`   | Fetches the latest calidus key registration for a stake pool       |
 | `fetchDrepName`     | Fetches the on-chain registered name for a DRep                    |
 | `validateDrep`      | Returns true only when the DRep ID is currently registered         |
+| `validatePool`      | Returns true only when the stake pool is currently registered      |
 | `fetchHandle`       | Resolves the most representative ADA Handle for an address         |
 | `fetchHandles`      | Resolves every ADA Handle held by an address, in a stable order    |
 | `fetchTxInfo`       | Fetches detailed transaction info                                  |

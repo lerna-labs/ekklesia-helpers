@@ -2,7 +2,8 @@
  * Signature verification for Cardano addresses.
  *
  * Supports Ed25519 signatures (basic, CIP-8, CIP-30) and COSE Sign1 structures.
- * Handles pool calidus key lookups and native script (multisig) validation.
+ * Handles pool registration and calidus key lookups and native script
+ * (multisig) validation.
  *
  * @module crypto/verifySignature
  */
@@ -14,7 +15,7 @@ const { blake2bHex } = pkg;
 
 import { PublicKey, Ed25519Signature } from '@emurgo/cardano-serialization-lib-nodejs';
 import { getAddressType } from '../validation/address.js';
-import { getScript, fetchCalidusKey } from '../cardano/cardanoApi.js';
+import { getScript, fetchCalidusKey, validatePool } from '../cardano/cardanoApi.js';
 
 /** A signature object as submitted by wallets. */
 export interface SignatureObject {
@@ -40,6 +41,9 @@ export interface ScriptCriteria {
 }
 
 const regExpHex = /^[0-9a-fA-F]+$/;
+
+/** CIP-151, Calidus Key (payload field 7): an all-zero key revokes the pool's Calidus key. */
+const regExpRevokedCalidusKey = /^0+$/;
 
 function getHash(content: string, digestLengthBytes = 32): string {
   return blake2bHex(Buffer.from(content, 'hex'), undefined, digestLengthBytes);
@@ -236,8 +240,9 @@ function get_key_signature_and_payload(signature: SignatureObject, payload: stri
 /**
  * Verifies an Ed25519 or COSE signature against a Cardano address.
  *
- * For pool addresses, performs a Koios API lookup for the pool's calidus key
- * and verifies the signature against that key.
+ * For a pool ID, the pool must be registered (see {@link validatePool}), and
+ * the signature may come from the pool cold key, whose hash is the pool ID, or
+ * from the pool's active calidus key. A revoked calidus key matches nothing.
  *
  * The protected `address` header of a COSE signature must name the claimed
  * address. For a DRep it may instead name the DRep key hash, its CIP-129 ID or
@@ -247,11 +252,13 @@ function get_key_signature_and_payload(signature: SignatureObject, payload: stri
  * @param payload - The hex-encoded payload that was signed.
  * @param address - The bech32-encoded Cardano address of the signer.
  * @param signature - The signature object (Ed25519 or COSE format).
- * @returns `true` if the signature is valid, `false` if invalid, or a {@link SignatureError}.
+ * @returns `true` if the signature is valid, `false` if invalid, or a
+ *   {@link SignatureError}, which is `{ error: 'Pool is not registered' }` for a
+ *   pool that is retired or was never registered.
  * @throws {@link ProviderError} if chain data is needed and the provider is
- *   unreachable. Pool addresses trigger a Calidus key lookup, so a returned
- *   {@link SignatureError} always means the signature genuinely failed to
- *   verify, never that the key could not be looked up.
+ *   unreachable. Pool IDs trigger a registration lookup, and a calidus key
+ *   lookup unless the cold key signed, so a returned {@link SignatureError}
+ *   always means the provider answered, never that a lookup failed.
  *
  * @example
  * ```ts
@@ -300,8 +307,11 @@ export async function verifySignature(
 
   switch (type_details.type) {
     case 'pool': {
+      if (!(await validatePool(address))) return { error: 'Pool is not registered' };
+      // CIP-151, Scope (payload field 1): the pool ID is the hash of the pool cold key.
+      if (keyHash === SignatureKeyHash.to_hex()) break;
       const calidus_key = await fetchCalidusKey(address);
-      if (calidus_key != null) {
+      if (calidus_key != null && !regExpRevokedCalidusKey.test(calidus_key.calidus_pub_key)) {
         keyHash = PublicKey.from_hex(calidus_key.calidus_pub_key).hash().to_hex();
         header_addresses.push('a1' + keyHash);
       }

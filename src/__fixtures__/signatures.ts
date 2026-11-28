@@ -114,7 +114,8 @@ export const invalid_calidus_payload = {
   pool_id: 'pool1rkfs9glmfva3jd0q9vnlqvuhnrflpzj4l07u6sayfx5k7d788us',
 };
 
-export const unregistered_calidus_payload = {
+// Signed by the calidus key of a second preprod pool, pool1m8glad...
+export const second_pool_calidus_payload = {
   COSE_Sign1_hex:
     '84582aa201276761646472657373581da1b188ec376bb87eec662ef4c2b2b4a283c40d48c4255d9fa396cd113ba166686173686564f458496c6f67696e5f706f6f6c316d38676c61643430347a68777361366b326c616c6d367175393570746666666a39756b35647270686d753072736a336d6e617a5f313233343536373839305840362029479183ba70f4f44004157db685f58061b487db92c4afb33cf6cc63c82a9c68ac2a857c2bce238f9c653476741f68d19401799b2563785684170b72e107',
   COSE_Key_hex:
